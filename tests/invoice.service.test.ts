@@ -111,7 +111,7 @@ describe("InvoiceService", () => {
           amount: "1000.00",
           discountRate: "5.00",
           dueDate: new Date("2024-12-31"),
-        }),
+        })
       ).rejects.toThrow(ServiceError);
 
       await expect(
@@ -122,7 +122,7 @@ describe("InvoiceService", () => {
           amount: "1000.00",
           discountRate: "5.00",
           dueDate: new Date("2024-12-31"),
-        }),
+        })
       ).rejects.toMatchObject({
         code: "invoice_number_exists",
         statusCode: 409,
@@ -154,10 +154,7 @@ describe("InvoiceService", () => {
     it("should verify ownership when sellerId provided", async () => {
       mockInvoiceRepository.findOne.mockResolvedValue(mockInvoice);
 
-      const result = await invoiceService.getInvoiceById(
-        "invoice-123",
-        "seller-456",
-      );
+      const result = await invoiceService.getInvoiceById("invoice-123", "seller-456");
 
       expect(result?.id).toBe("invoice-123");
     });
@@ -166,7 +163,7 @@ describe("InvoiceService", () => {
       mockInvoiceRepository.findOne.mockResolvedValue(mockInvoice);
 
       await expect(
-        invoiceService.getInvoiceById("invoice-123", "different-seller"),
+        invoiceService.getInvoiceById("invoice-123", "different-seller")
       ).rejects.toMatchObject({
         code: "unauthorized_invoice_access",
         statusCode: 403,
@@ -202,7 +199,7 @@ describe("InvoiceService", () => {
           where: expect.objectContaining({
             status: InvoiceStatus.DRAFT,
           }),
-        }),
+        })
       );
     });
 
@@ -220,7 +217,7 @@ describe("InvoiceService", () => {
         expect.objectContaining({
           skip: 10,
           take: 20,
-        }),
+        })
       );
     });
   });
@@ -270,7 +267,7 @@ describe("InvoiceService", () => {
           sellerId: "seller-456",
           invoiceId: "invoice-123",
           customerName: "Updated",
-        }),
+        })
       ).rejects.toMatchObject({
         code: "invalid_invoice_status",
         statusCode: 400,
@@ -285,7 +282,7 @@ describe("InvoiceService", () => {
           sellerId: "different-seller",
           invoiceId: "invoice-123",
           customerName: "Updated",
-        }),
+        })
       ).rejects.toMatchObject({
         code: "unauthorized_invoice_access",
         statusCode: 403,
@@ -300,7 +297,7 @@ describe("InvoiceService", () => {
           sellerId: "seller-456",
           invoiceId: "nonexistent",
           customerName: "Updated",
-        }),
+        })
       ).rejects.toMatchObject({
         code: "invoice_not_found",
         statusCode: 404,
@@ -322,7 +319,7 @@ describe("InvoiceService", () => {
       expect(mockInvoiceRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
           deletedAt: expect.any(Date),
-        }),
+        })
       );
     });
 
@@ -330,19 +327,19 @@ describe("InvoiceService", () => {
       const publishedInvoice = { ...mockInvoice, status: InvoiceStatus.PUBLISHED };
       mockInvoiceRepository.findOne.mockResolvedValue(publishedInvoice);
 
-      await expect(
-        invoiceService.deleteInvoice("invoice-123", "seller-456"),
-      ).rejects.toMatchObject({
-        code: "invalid_invoice_status",
-        statusCode: 400,
-      });
+      await expect(invoiceService.deleteInvoice("invoice-123", "seller-456")).rejects.toMatchObject(
+        {
+          code: "invalid_invoice_status",
+          statusCode: 400,
+        }
+      );
     });
 
     it("should throw error for unauthorized delete", async () => {
       mockInvoiceRepository.findOne.mockResolvedValue(mockInvoice);
 
       await expect(
-        invoiceService.deleteInvoice("invoice-123", "different-seller"),
+        invoiceService.deleteInvoice("invoice-123", "different-seller")
       ).rejects.toMatchObject({
         code: "unauthorized_invoice_access",
         statusCode: 403,
@@ -353,12 +350,13 @@ describe("InvoiceService", () => {
   // ============ PUBLISH INVOICE TESTS ============
   describe("publishInvoice", () => {
     it("should transition draft invoice to published", async () => {
-      const publishableInvoice = {
+      const invoiceWithSeller = {
         ...mockInvoice,
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days in future
+        seller: { kycStatus: "approved" },
       };
-      mockInvoiceRepository.findOne.mockResolvedValue(publishableInvoice);
-      const publishedInvoice = { ...publishableInvoice, status: InvoiceStatus.PUBLISHED };
+      mockInvoiceRepository.findOne.mockResolvedValue(invoiceWithSeller);
+      const publishedInvoice = { ...invoiceWithSeller, status: InvoiceStatus.PUBLISHED };
       mockInvoiceRepository.save.mockResolvedValue(publishedInvoice);
 
       const result = await invoiceService.publishInvoice({
@@ -372,7 +370,8 @@ describe("InvoiceService", () => {
     it("should reject a due date within 24 hours", async () => {
       const soonDueInvoice = {
         ...mockInvoice,
-        dueDate: new Date(Date.now() + 60 * 60 * 1000),
+        dueDate: new Date(Date.now() + 60 * 60 * 1000), // 1 hour in future
+        seller: { kycStatus: "approved" },
       };
       mockInvoiceRepository.findOne.mockResolvedValue(soonDueInvoice);
 
@@ -380,7 +379,7 @@ describe("InvoiceService", () => {
         invoiceService.publishInvoice({
           invoiceId: "invoice-123",
           sellerId: "seller-456",
-        }),
+        })
       ).rejects.toMatchObject({
         code: "invalid_due_date",
         statusCode: 400,
@@ -388,14 +387,19 @@ describe("InvoiceService", () => {
     });
 
     it("should reject invalid status transitions", async () => {
-      const settledInvoice = { ...mockInvoice, status: InvoiceStatus.SETTLED };
+      const settledInvoice = {
+        ...mockInvoice,
+        status: InvoiceStatus.SETTLED,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        seller: { kycStatus: "approved" },
+      };
       mockInvoiceRepository.findOne.mockResolvedValue(settledInvoice);
 
       await expect(
         invoiceService.publishInvoice({
           invoiceId: "invoice-123",
           sellerId: "seller-456",
-        }),
+        })
       ).rejects.toMatchObject({
         code: "invalid_status_transition",
         statusCode: 400,
@@ -403,13 +407,18 @@ describe("InvoiceService", () => {
     });
 
     it("should throw error for unauthorized publish", async () => {
-      mockInvoiceRepository.findOne.mockResolvedValue(mockInvoice);
+      const invoiceWithSeller = {
+        ...mockInvoice,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        seller: { kycStatus: "approved" },
+      };
+      mockInvoiceRepository.findOne.mockResolvedValue(invoiceWithSeller);
 
       await expect(
         invoiceService.publishInvoice({
           invoiceId: "invoice-123",
           sellerId: "different-seller",
-        }),
+        })
       ).rejects.toMatchObject({
         code: "unauthorized_invoice_access",
         statusCode: 403,
@@ -421,6 +430,7 @@ describe("InvoiceService", () => {
         ...mockInvoice,
         status: InvoiceStatus.PENDING,
         dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        seller: { kycStatus: "approved" },
       };
       mockInvoiceRepository.findOne.mockResolvedValue(pendingInvoice);
       const publishedInvoice = { ...pendingInvoice, status: InvoiceStatus.PUBLISHED };
@@ -432,6 +442,25 @@ describe("InvoiceService", () => {
       });
 
       expect(result.status).toBe(InvoiceStatus.PUBLISHED);
+    });
+
+    it("should reject publish for seller without KYC approval", async () => {
+      const invoiceWithPendingKYC = {
+        ...mockInvoice,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        seller: { kycStatus: "pending" },
+      };
+      mockInvoiceRepository.findOne.mockResolvedValue(invoiceWithPendingKYC);
+
+      await expect(
+        invoiceService.publishInvoice({
+          invoiceId: "invoice-123",
+          sellerId: "seller-456",
+        })
+      ).rejects.toMatchObject({
+        code: "kyc_approval_required",
+        statusCode: 403,
+      });
     });
   });
 
@@ -472,20 +501,19 @@ describe("InvoiceService", () => {
         uploadInput.fileBuffer,
         uploadInput.filename,
         uploadInput.mimeType,
+        "invoice-123"
       );
       expect(mockInvoiceRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
           ipfsHash: "QmTestHash123",
-        }),
+        })
       );
     });
 
     it("should throw error when invoice not found", async () => {
       mockInvoiceRepository.findOne.mockResolvedValue(null);
 
-      await expect(invoiceService.uploadDocument(uploadInput)).rejects.toThrow(
-        ServiceError,
-      );
+      await expect(invoiceService.uploadDocument(uploadInput)).rejects.toThrow(ServiceError);
 
       await expect(invoiceService.uploadDocument(uploadInput)).rejects.toMatchObject({
         code: "invoice_not_found",
@@ -497,9 +525,7 @@ describe("InvoiceService", () => {
       const wrongSellerInvoice = { ...mockInvoice, sellerId: "different-seller" };
       mockInvoiceRepository.findOne.mockResolvedValue(wrongSellerInvoice);
 
-      await expect(invoiceService.uploadDocument(uploadInput)).rejects.toThrow(
-        ServiceError,
-      );
+      await expect(invoiceService.uploadDocument(uploadInput)).rejects.toThrow(ServiceError);
 
       await expect(invoiceService.uploadDocument(uploadInput)).rejects.toMatchObject({
         code: "unauthorized_invoice_access",
@@ -510,12 +536,10 @@ describe("InvoiceService", () => {
     it("should propagate IPFS service errors", async () => {
       mockInvoiceRepository.findOne.mockResolvedValue(mockInvoice);
       mockIPFSService.uploadFile.mockRejectedValue(
-        new ServiceError("file_too_large", "File too large", 400),
+        new ServiceError("file_too_large", "File too large", 400)
       );
 
-      await expect(invoiceService.uploadDocument(uploadInput)).rejects.toThrow(
-        ServiceError,
-      );
+      await expect(invoiceService.uploadDocument(uploadInput)).rejects.toThrow(ServiceError);
 
       await expect(invoiceService.uploadDocument(uploadInput)).rejects.toMatchObject({
         code: "file_too_large",

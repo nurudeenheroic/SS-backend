@@ -1,5 +1,6 @@
 import { IPFSService } from "../src/services/ipfs.service";
 import { ServiceError } from "../src/utils/service-error";
+import { logger } from "../src/observability/logger";
 
 describe("IPFSService", () => {
   const mockConfig = {
@@ -20,6 +21,7 @@ describe("IPFSService", () => {
     mockFetch = jest.fn();
     ipfsService = new IPFSService({
       config: mockConfig,
+      logger: logger.child({ test: "ipfs-service" }),
       fetchImplementation: mockFetch,
     });
   });
@@ -40,11 +42,7 @@ describe("IPFSService", () => {
       };
       mockFetch.mockResolvedValue(mockResponse as any);
 
-      const result = await ipfsService.uploadFile(
-        validFileBuffer,
-        validFilename,
-        validMimeType,
-      );
+      const result = await ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType);
 
       expect(result).toEqual({
         hash: "QmTestHash123",
@@ -60,7 +58,7 @@ describe("IPFSService", () => {
             Authorization: "Bearer test-jwt-token",
           },
           body: expect.any(FormData),
-        }),
+        })
       );
     });
 
@@ -68,11 +66,11 @@ describe("IPFSService", () => {
       const largeBuffer = Buffer.alloc(11 * 1024 * 1024); // 11MB
 
       await expect(
-        ipfsService.uploadFile(largeBuffer, validFilename, validMimeType),
+        ipfsService.uploadFile(largeBuffer, validFilename, validMimeType)
       ).rejects.toThrow(ServiceError);
 
       await expect(
-        ipfsService.uploadFile(largeBuffer, validFilename, validMimeType),
+        ipfsService.uploadFile(largeBuffer, validFilename, validMimeType)
       ).rejects.toMatchObject({
         code: "file_too_large",
         statusCode: 400,
@@ -81,11 +79,11 @@ describe("IPFSService", () => {
 
     it("should reject files with invalid MIME types", async () => {
       await expect(
-        ipfsService.uploadFile(validFileBuffer, "test.txt", "text/plain"),
+        ipfsService.uploadFile(validFileBuffer, "test.txt", "text/plain")
       ).rejects.toThrow(ServiceError);
 
       await expect(
-        ipfsService.uploadFile(validFileBuffer, "test.txt", "text/plain"),
+        ipfsService.uploadFile(validFileBuffer, "test.txt", "text/plain")
       ).rejects.toMatchObject({
         code: "invalid_file_type",
         statusCode: 400,
@@ -102,11 +100,11 @@ describe("IPFSService", () => {
       mockFetch.mockResolvedValue(mockResponse as any);
 
       await expect(
-        ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType),
+        ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType)
       ).rejects.toThrow(ServiceError);
 
       await expect(
-        ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType),
+        ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType)
       ).rejects.toMatchObject({
         code: "ipfs_upload_failed",
         statusCode: 502,
@@ -117,11 +115,11 @@ describe("IPFSService", () => {
       mockFetch.mockRejectedValue(new Error("Network error"));
 
       await expect(
-        ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType),
+        ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType)
       ).rejects.toThrow(ServiceError);
 
       await expect(
-        ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType),
+        ipfsService.uploadFile(validFileBuffer, validFilename, validMimeType)
       ).rejects.toMatchObject({
         code: "ipfs_upload_error",
         statusCode: 500,

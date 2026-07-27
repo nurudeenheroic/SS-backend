@@ -1,14 +1,20 @@
 import { DataSource } from "typeorm";
 import { Invoice } from "../models/Invoice.model";
-import { InvoiceStatus } from "../types/enums";
+import { User } from "../models/User.model";
+import { InvoiceStatus, KYCStatus } from "../types/enums";
 import { ServiceError } from "../utils/service-error";
 import { validateInvoiceForPublish } from "../lib/invoice-validation";
 import type { IPFSService, IPFSUploadResult } from "./ipfs.service";
 
 export interface InvoiceRepositoryContract {
-  findOne(options: { where: { id: string } }): Promise<Invoice | null>;
+  findOne(options: { where: { id: string }; relations?: string[] }): Promise<Invoice | null>;
   findOneBy(options: { id?: string; invoiceNumber?: string }): Promise<Invoice | null>;
-  find(options: { where: { sellerId: string; status?: InvoiceStatus}, skip?: number, take?: number, order?: { [key: string]: "ASC" | "DESC" } }): Promise<Invoice[]>;
+  find(options: {
+    where: { sellerId: string; status?: InvoiceStatus };
+    skip?: number;
+    take?: number;
+    order?: { [key: string]: "ASC" | "DESC" };
+  }): Promise<Invoice[]>;
   save(invoice: Invoice): Promise<Invoice>;
   count(options: { where: { sellerId: string; status?: InvoiceStatus } }): Promise<number>;
   create(data: Partial<Invoice>): Invoice;
@@ -88,23 +94,10 @@ export interface GetInvoicesOptions {
  * Valid state transitions for InvoiceStatus
  */
 const VALID_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
-  [InvoiceStatus.DRAFT]: [
-    InvoiceStatus.PENDING,
-    InvoiceStatus.PUBLISHED,
-    InvoiceStatus.CANCELLED,
-  ],
-  [InvoiceStatus.PENDING]: [
-    InvoiceStatus.PUBLISHED,
-    InvoiceStatus.CANCELLED,
-  ],
-  [InvoiceStatus.PUBLISHED]: [
-    InvoiceStatus.FUNDED,
-    InvoiceStatus.CANCELLED,
-  ],
-  [InvoiceStatus.FUNDED]: [
-    InvoiceStatus.SETTLED,
-    InvoiceStatus.CANCELLED,
-  ],
+  [InvoiceStatus.DRAFT]: [InvoiceStatus.PENDING, InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED],
+  [InvoiceStatus.PENDING]: [InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED],
+  [InvoiceStatus.PUBLISHED]: [InvoiceStatus.FUNDED, InvoiceStatus.CANCELLED],
+  [InvoiceStatus.FUNDED]: [InvoiceStatus.SETTLED, InvoiceStatus.CANCELLED],
   [InvoiceStatus.SETTLED]: [],
   [InvoiceStatus.CANCELLED]: [],
 };
@@ -125,7 +118,7 @@ export class InvoiceService {
   private calculateNetAmount(amount: string, discountRate: string): string {
     const amountNum = parseFloat(amount);
     const discountNum = parseFloat(discountRate);
-    const netAmount = amountNum - (amountNum * (discountNum / 100));
+    const netAmount = amountNum - amountNum * (discountNum / 100);
     return netAmount.toFixed(4);
   }
 
@@ -146,11 +139,7 @@ export class InvoiceService {
     });
 
     if (existing) {
-      throw new ServiceError(
-        "invoice_number_exists",
-        "Invoice number must be unique",
-        409,
-      );
+      throw new ServiceError("invoice_number_exists", "Invoice number must be unique", 409);
     }
 
     // Calculate net amount
@@ -177,10 +166,7 @@ export class InvoiceService {
   /**
    * Get invoice by ID
    */
-  async getInvoiceById(
-    invoiceId: string,
-    sellerId?: string,
-  ): Promise<InvoiceDTO | null> {
+  async getInvoiceById(invoiceId: string, sellerId?: string): Promise<InvoiceDTO | null> {
     const invoice = await this.invoiceRepository.findOne({
       where: { id: invoiceId },
     });
@@ -194,7 +180,7 @@ export class InvoiceService {
       throw new ServiceError(
         "unauthorized_invoice_access",
         "You do not have access to this invoice",
-        403,
+        403
       );
     }
 
@@ -250,7 +236,7 @@ export class InvoiceService {
       throw new ServiceError(
         "unauthorized_invoice_access",
         "You can only update your own invoices",
-        403,
+        403
       );
     }
 
@@ -259,7 +245,7 @@ export class InvoiceService {
       throw new ServiceError(
         "invalid_invoice_status",
         `Cannot update invoice in ${invoice.status} status. Only draft invoices can be updated.`,
-        400,
+        400
       );
     }
 
@@ -303,19 +289,16 @@ export class InvoiceService {
       throw new ServiceError(
         "unauthorized_invoice_access",
         "You can only delete your own invoices",
-        403,
+        403
       );
     }
 
     // Only draft and cancelled invoices can be deleted
-    if (
-      invoice.status !== InvoiceStatus.DRAFT &&
-      invoice.status !== InvoiceStatus.CANCELLED
-    ) {
+    if (invoice.status !== InvoiceStatus.DRAFT && invoice.status !== InvoiceStatus.CANCELLED) {
       throw new ServiceError(
         "invalid_invoice_status",
         `Cannot delete invoice in ${invoice.status} status`,
-        400,
+        400
       );
     }
 
@@ -329,6 +312,7 @@ export class InvoiceService {
   async publishInvoice(input: PublishInvoiceInput): Promise<InvoiceDTO> {
     const invoice = await this.invoiceRepository.findOne({
       where: { id: input.invoiceId },
+      relations: ["seller"],
     });
 
     if (!invoice) {
@@ -340,7 +324,17 @@ export class InvoiceService {
       throw new ServiceError(
         "unauthorized_invoice_access",
         "You can only publish your own invoices",
-        403,
+        403
+      );
+    }
+
+    // Check KYC status
+    const seller = invoice.seller as unknown as User;
+    if (!seller || seller.kycStatus !== KYCStatus.APPROVED) {
+      throw new ServiceError(
+        "kyc_approval_required",
+        "KYC approval is required to publish invoices",
+        403
       );
     }
 
@@ -349,7 +343,7 @@ export class InvoiceService {
       throw new ServiceError(
         "invalid_status_transition",
         `Cannot transition from ${invoice.status} to ${InvoiceStatus.PUBLISHED}`,
-        400,
+        400
       );
     }
 
@@ -377,7 +371,7 @@ export class InvoiceService {
       throw new ServiceError(
         "unauthorized_invoice_access",
         "You can only upload documents to your own invoices",
-        403,
+        403
       );
     }
 
@@ -386,6 +380,7 @@ export class InvoiceService {
       input.fileBuffer,
       input.filename,
       input.mimeType,
+      input.invoiceId
     );
 
     // Update invoice with IPFS hash
@@ -425,7 +420,7 @@ export class InvoiceService {
 
 export function createInvoiceService(
   dataSource: DataSource,
-  ipfsService: IPFSService,
+  ipfsService: IPFSService
 ): InvoiceService {
   const invoiceRepository = dataSource.getRepository(Invoice);
 
