@@ -357,7 +357,7 @@ describe("InvoiceService", () => {
     } as Invoice;
 
     it("should transition draft invoice to published", async () => {
-      mockInvoiceRepository.findOne.mockResolvedValue(publishableInvoice);
+      mockInvoiceRepository.findOne.mockResolvedValue({ ...publishableInvoice });
       const publishedInvoice = { ...publishableInvoice, status: InvoiceStatus.PUBLISHED };
       mockInvoiceRepository.save.mockResolvedValue(publishedInvoice);
 
@@ -439,6 +439,7 @@ describe("InvoiceService", () => {
     it("should reject publish for seller without KYC approval", async () => {
       const invoiceWithPendingKYC = {
         ...publishableInvoice,
+        status: InvoiceStatus.DRAFT,
         seller: { kycStatus: "pending" },
       };
       mockInvoiceRepository.findOne.mockResolvedValue(invoiceWithPendingKYC);
@@ -455,7 +456,7 @@ describe("InvoiceService", () => {
     });
 
     it("should reject publishing an invoice that fails pre-publish validation", async () => {
-      const invalidInvoice = { ...publishableInvoice, ipfsHash: null };
+      const invalidInvoice = { ...publishableInvoice, status: InvoiceStatus.DRAFT, ipfsHash: null };
       mockInvoiceRepository.findOne.mockResolvedValue(invalidInvoice);
 
       await expect(
