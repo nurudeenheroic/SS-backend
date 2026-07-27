@@ -353,8 +353,12 @@ describe("InvoiceService", () => {
   // ============ PUBLISH INVOICE TESTS ============
   describe("publishInvoice", () => {
     it("should transition draft invoice to published", async () => {
-      mockInvoiceRepository.findOne.mockResolvedValue(mockInvoice);
-      const publishedInvoice = { ...mockInvoice, status: InvoiceStatus.PUBLISHED };
+      const publishableInvoice = {
+        ...mockInvoice,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      };
+      mockInvoiceRepository.findOne.mockResolvedValue(publishableInvoice);
+      const publishedInvoice = { ...publishableInvoice, status: InvoiceStatus.PUBLISHED };
       mockInvoiceRepository.save.mockResolvedValue(publishedInvoice);
 
       const result = await invoiceService.publishInvoice({
@@ -363,6 +367,24 @@ describe("InvoiceService", () => {
       });
 
       expect(result.status).toBe(InvoiceStatus.PUBLISHED);
+    });
+
+    it("should reject a due date within 24 hours", async () => {
+      const soonDueInvoice = {
+        ...mockInvoice,
+        dueDate: new Date(Date.now() + 60 * 60 * 1000),
+      };
+      mockInvoiceRepository.findOne.mockResolvedValue(soonDueInvoice);
+
+      await expect(
+        invoiceService.publishInvoice({
+          invoiceId: "invoice-123",
+          sellerId: "seller-456",
+        }),
+      ).rejects.toMatchObject({
+        code: "invalid_due_date",
+        statusCode: 400,
+      });
     });
 
     it("should reject invalid status transitions", async () => {
@@ -395,7 +417,11 @@ describe("InvoiceService", () => {
     });
 
     it("should allow transition from pending to published", async () => {
-      const pendingInvoice = { ...mockInvoice, status: InvoiceStatus.PENDING };
+      const pendingInvoice = {
+        ...mockInvoice,
+        status: InvoiceStatus.PENDING,
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      };
       mockInvoiceRepository.findOne.mockResolvedValue(pendingInvoice);
       const publishedInvoice = { ...pendingInvoice, status: InvoiceStatus.PUBLISHED };
       mockInvoiceRepository.save.mockResolvedValue(publishedInvoice);
