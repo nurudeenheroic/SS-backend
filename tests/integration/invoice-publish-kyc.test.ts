@@ -64,10 +64,18 @@ describe("Invoice Publish KYC Integration Test", () => {
       ],
       synchronize: true,
       logging: false,
-      dropSchema: true,
+      // Do NOT use dropSchema here — the reconcile integration test owns schema
+      // lifecycle and also uses dropSchema:true. Both tests share the same
+      // PostgreSQL database and run in parallel Jest workers, so concurrent
+      // dropSchema calls wipe each other's seed data mid-run.
+      // Instead, truncate only the rows this test owns before inserting.
     });
 
     await dataSource.initialize();
+
+    // Clean up any rows left by a previous run before inserting fresh seed data.
+    await dataSource.getRepository(Invoice).delete({});
+    await dataSource.getRepository(User).delete({});
 
     // Create test users with different KYC statuses
     const userRepository = dataSource.getRepository(User);
