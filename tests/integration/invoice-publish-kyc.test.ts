@@ -97,7 +97,7 @@ describe("Invoice Publish KYC Integration Test", () => {
         amount: "1000.0000",
         discountRate: "10.00",
         netAmount: "900.0000",
-        dueDate: new Date("2025-12-31"),
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days in future
         status: InvoiceStatus.DRAFT,
       })
     );
@@ -165,7 +165,7 @@ describe("Invoice Publish KYC Integration Test", () => {
           amount: "1000.0000",
           discountRate: "10.00",
           netAmount: "900.0000",
-          dueDate: new Date("2025-12-31"),
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days in future
           status: InvoiceStatus.DRAFT,
         })
       );
@@ -222,7 +222,7 @@ describe("Invoice Publish KYC Integration Test", () => {
           amount: "1000.0000",
           discountRate: "10.00",
           netAmount: "900.0000",
-          dueDate: new Date("2025-12-31"),
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days in future
           status: InvoiceStatus.DRAFT,
         })
       );
