@@ -164,11 +164,68 @@ describe("ReconcilePendingStellarStateWorker", () => {
           message: "Failed to reconcile pending Stellar state.",
         }),
         expect.objectContaining({
-          level: "info",
+          level: "debug",
           message: "Completed Stellar reconciliation tick.",
         }),
       ]),
     );
+  });
+
+  it("logs cycle start and completion once per cycle with matching cycle_id", async () => {
+    const now = new Date("2026-01-01T00:10:00.000Z");
+    const repository = {
+      findPendingCandidates: jest.fn().mockResolvedValue([
+        createCandidate("investment-1", "hash-1"),
+        createCandidate("investment-2", "hash-2"),
+      ]),
+    };
+    const paymentVerifier = {
+      verifyPayment: jest
+        .fn()
+        .mockResolvedValueOnce(createVerifiedResult("investment-1", "verified"))
+        .mockResolvedValueOnce(createVerifiedResult("investment-2", "already_verified")),
+    };
+    const logger = new CaptureLogger();
+    const worker = new ReconcilePendingStellarStateWorker({
+      repository,
+      paymentVerifier,
+      config: {
+        enabled: true,
+        intervalMs: 1_000,
+        batchSize: 3,
+        gracePeriodMs: 60_000,
+        maxRuntimeMs: 10_000,
+      },
+      logger,
+      now: () => now,
+      yieldControl: jest.fn(async () => undefined),
+    });
+
+    await worker.runTick();
+
+    const startLogs = logger.entries.filter(
+      (entry) => entry.level === "info" && entry.message === "Started Stellar reconciliation tick.",
+    );
+    const completionLogs = logger.entries.filter(
+      (entry) => entry.level === "debug" && entry.message === "Completed Stellar reconciliation tick.",
+    );
+
+    expect(startLogs).toHaveLength(1);
+    expect(completionLogs).toHaveLength(1);
+
+    expect(startLogs[0].metadata).toMatchObject({
+      cycle_id: expect.any(String),
+      pending_count: 2,
+      started_at: now.toISOString(),
+    });
+
+    expect(completionLogs[0].metadata).toMatchObject({
+      cycle_id: startLogs[0].metadata.cycle_id,
+      confirmed_count: 1,
+      failed_count: 0,
+      skipped_count: 1,
+      duration_ms: expect.any(Number),
+    });
   });
 
   it("stops starting new reconciliations once the tick runtime budget is exhausted", async () => {
