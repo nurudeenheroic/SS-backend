@@ -3,6 +3,7 @@ import { Invoice } from "../models/Invoice.model";
 import { User } from "../models/User.model";
 import { InvoiceStatus, KYCStatus } from "../types/enums";
 import { ServiceError } from "../utils/service-error";
+import { validateInvoiceForPublish } from "../lib/invoice-validation";
 import type { IPFSService, IPFSUploadResult } from "./ipfs.service";
 
 export interface InvoiceRepositoryContract {
@@ -345,6 +346,8 @@ export class InvoiceService {
         400
       );
     }
+
+    validateInvoiceForPublish(invoice);
 
     invoice.status = InvoiceStatus.PUBLISHED;
     const updated = await this.invoiceRepository.save(invoice);

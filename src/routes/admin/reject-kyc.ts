@@ -5,19 +5,20 @@ import { KYCStatus } from "@/types/enums";
 import { truncateWalletAddress } from "@/lib/kyc";
 import { logger } from "@/observability/logger";
 
-interface ApproveKYCBody {
+interface RejectKYCBody {
   userId: string;
   reviewerId: string;
+  rejectionReason: string;
 }
 
-export async function approveKYC(req: Request<unknown, unknown, ApproveKYCBody>, res: Response, dataSource: DataSource) {
+export async function rejectKYC(req: Request<unknown, unknown, RejectKYCBody>, res: Response, dataSource: DataSource) {
   try {
     const adminKey = req.headers["x-admin-key"];
     if (adminKey !== process.env.ADMIN_API_KEY) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { userId, reviewerId } = req.body;
+    const { userId, reviewerId, rejectionReason } = req.body;
 
     const userRepo = dataSource.getRepository(User);
     const user = await userRepo.findOneBy({ id: userId });
@@ -25,16 +26,17 @@ export async function approveKYC(req: Request<unknown, unknown, ApproveKYCBody>,
       return res.status(404).json({ error: "User not found" });
     }
 
-    await userRepo.update(userId, { kycStatus: KYCStatus.APPROVED });
+    await userRepo.update(userId, { kycStatus: KYCStatus.REJECTED });
 
     // Logged only after the DB update succeeds, so the audit trail never
     // records a decision that didn't actually persist.
     const decidedAt = new Date().toISOString();
-    logger.info("KYC approval decision", {
+    logger.info("KYC rejection decision", {
       wallet_address: truncateWalletAddress(user.stellarAddress),
-      decision: "approved",
+      decision: "rejected",
       reviewer_id: reviewerId,
       decided_at: decidedAt,
+      rejection_reason: rejectionReason,
     });
 
     return res.json({ success: true });

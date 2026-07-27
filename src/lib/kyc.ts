@@ -17,3 +17,9 @@ export function requireApprovedKYC(user: { kycStatus: KYCStatus }) {
     throw new KYCError("KYC not approved");
   }
 }
+
+/** Truncates a wallet address to its first 4 and last 4 characters for safe logging. */
+export function truncateWalletAddress(address: string): string {
+  if (address.length <= 8) return address;
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
