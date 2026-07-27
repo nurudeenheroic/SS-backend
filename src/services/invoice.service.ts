@@ -329,7 +329,7 @@ export class InvoiceService {
 
     // Check KYC status
     const seller = invoice.seller as unknown as User;
-    if (seller.kycStatus !== KYCStatus.APPROVED) {
+    if (!seller || seller.kycStatus !== KYCStatus.APPROVED) {
       throw new ServiceError(
         "kyc_approval_required",
         "KYC approval is required to publish invoices",

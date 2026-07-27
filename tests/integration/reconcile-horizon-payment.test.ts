@@ -349,7 +349,6 @@ describe("Horizon Reconciliation Worker Integration Test", () => {
         console.warn("Skipping test - DATABASE_URL not configured");
         return;
       }
-      const logSpy = jest.spyOn(logger, "info");
 
       // Create investment with pending payment
       const investmentRepository = dataSource.getRepository(Investment);
@@ -393,21 +392,14 @@ describe("Horizon Reconciliation Worker Integration Test", () => {
         });
 
       // Run reconciliation cycle
-      await worker.runTick();
+      const result = await worker.runTick();
 
-      // Verify structured log was emitted
-      expect(logSpy).toHaveBeenCalledWith(
-        "Completed Stellar reconciliation tick.",
-        expect.objectContaining({
-          candidatesFetched: 1,
-          processed: 1,
-          verified: 1,
-          failed: 0,
-          durationMs: expect.any(Number),
-        })
-      );
-
-      logSpy.mockRestore();
+      // Verify reconciliation completed successfully
+      expect(result.candidatesFetched).toBe(1);
+      expect(result.processed).toBe(1);
+      expect(result.verified).toBe(1);
+      expect(result.failed).toBe(0);
+      expect(result.durationMs).toBeGreaterThan(0);
     });
   });
 });

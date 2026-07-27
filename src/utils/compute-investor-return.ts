@@ -1,17 +1,3 @@
-/**
- * Compute the pro-rata return for an investor given their funded amount,
- * total funded amount, and total settled proceeds.
- *
- * Uses floor division to ensure the sum of all investor returns never exceeds
- * the settled proceeds.
- *
- * Formula: floor((investorFunded / totalFunded) * settledProceeds)
- *
- * @param investorFundedStroops - Amount investor contributed in stroops (7 decimal places)
- * @param totalFundedStroops - Total amount funded by all investors in stroops
- * @param settledProceedsStroops - Total proceeds settled in stroops
- * @returns The investor's return in stroops (floored to nearest stroop)
- */
 export function computeInvestorReturn(
   investorFundedStroops: bigint,
   totalFundedStroops: bigint,
