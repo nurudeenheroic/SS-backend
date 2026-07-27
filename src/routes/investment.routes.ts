@@ -20,5 +20,8 @@ export function createInvestmentRouter({
   // POST /api/v1/investments - Create a new investment commitment
   router.post("/", authMiddleware, controller.createInvestment);
 
+  // GET /api/v1/investments/dashboard - Investor portfolio aggregate
+  router.get("/dashboard", authMiddleware, controller.getDashboard);
+
   return router;
 }

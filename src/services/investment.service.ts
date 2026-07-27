@@ -16,8 +16,53 @@ export interface CreateInvestmentInput {
   investmentAmount: string;
 }
 
+export interface InvestorDashboard {
+  totalInvested: string;
+  totalReturns: string;
+  activeInvestments: number;
+}
+
+const ACTIVE_INVESTMENT_STATUSES = [InvestmentStatus.PENDING, InvestmentStatus.CONFIRMED];
+
 export class InvestmentService {
   constructor(private readonly dataSource: DataSource) {}
+
+  /**
+   * Aggregates an investor's portfolio across all their investments.
+   *
+   * - totalInvested sums investmentAmount across every status (a commitment
+   *   counts once made, regardless of how it later resolves).
+   * - totalReturns sums actualReturn for SETTLED investments only — pending
+   *   or confirmed investments have no realised return yet.
+   * - activeInvestments counts investments still in flight (PENDING/CONFIRMED).
+   */
+  async getInvestorDashboard(investorId: string): Promise<InvestorDashboard> {
+    const investments = await this.dataSource.getRepository(Investment).find({
+      where: { investorId },
+    });
+
+    let totalInvested = new Decimal(0);
+    let totalReturns = new Decimal(0);
+    let activeInvestments = 0;
+
+    for (const investment of investments) {
+      totalInvested = totalInvested.plus(new Decimal(investment.investmentAmount));
+
+      if (investment.status === InvestmentStatus.SETTLED && investment.actualReturn !== null) {
+        totalReturns = totalReturns.plus(new Decimal(investment.actualReturn));
+      }
+
+      if (ACTIVE_INVESTMENT_STATUSES.includes(investment.status)) {
+        activeInvestments += 1;
+      }
+    }
+
+    return {
+      totalInvested: totalInvested.toFixed(4),
+      totalReturns: totalReturns.toFixed(4),
+      activeInvestments,
+    };
+  }
 
   /**
    * Creates a new investment commitment for an invoice.
