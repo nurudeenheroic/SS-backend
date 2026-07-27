@@ -73,9 +73,12 @@ describe("Invoice Publish KYC Integration Test", () => {
 
     await dataSource.initialize();
 
-    // Clean up any rows left by a previous run before inserting fresh seed data.
-    await dataSource.getRepository(Invoice).clear();
-    await dataSource.getRepository(User).clear();
+    // Clean up any rows left by a previous run. Truncate all tables in one
+    // statement with CASCADE so FK ordering doesn't matter.
+    const tableNames = dataSource.entityMetadatas
+      .map((e) => `"${e.tableName}"`)
+      .join(", ");
+    await dataSource.query(`TRUNCATE ${tableNames} RESTART IDENTITY CASCADE`);
 
     // Create test users with different KYC statuses
     const userRepository = dataSource.getRepository(User);
