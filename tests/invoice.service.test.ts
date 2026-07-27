@@ -349,14 +349,16 @@ describe("InvoiceService", () => {
 
   // ============ PUBLISH INVOICE TESTS ============
   describe("publishInvoice", () => {
+    const publishableInvoice = {
+      ...mockInvoice,
+      dueDate: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      ipfsHash: "QmTestHash",
+      seller: { kycStatus: "approved" },
+    } as Invoice;
+
     it("should transition draft invoice to published", async () => {
-      const invoiceWithSeller = {
-        ...mockInvoice,
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days in future
-        seller: { kycStatus: "approved" },
-      };
-      mockInvoiceRepository.findOne.mockResolvedValue(invoiceWithSeller);
-      const publishedInvoice = { ...invoiceWithSeller, status: InvoiceStatus.PUBLISHED };
+      mockInvoiceRepository.findOne.mockResolvedValue(publishableInvoice);
+      const publishedInvoice = { ...publishableInvoice, status: InvoiceStatus.PUBLISHED };
       mockInvoiceRepository.save.mockResolvedValue(publishedInvoice);
 
       const result = await invoiceService.publishInvoice({
@@ -381,7 +383,7 @@ describe("InvoiceService", () => {
           sellerId: "seller-456",
         })
       ).rejects.toMatchObject({
-        code: "invalid_due_date",
+        code: "invoice_not_publishable",
         statusCode: 400,
       });
     });
@@ -407,12 +409,7 @@ describe("InvoiceService", () => {
     });
 
     it("should throw error for unauthorized publish", async () => {
-      const invoiceWithSeller = {
-        ...mockInvoice,
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        seller: { kycStatus: "approved" },
-      };
-      mockInvoiceRepository.findOne.mockResolvedValue(invoiceWithSeller);
+      mockInvoiceRepository.findOne.mockResolvedValue(publishableInvoice);
 
       await expect(
         invoiceService.publishInvoice({
@@ -426,12 +423,7 @@ describe("InvoiceService", () => {
     });
 
     it("should allow transition from pending to published", async () => {
-      const pendingInvoice = {
-        ...mockInvoice,
-        status: InvoiceStatus.PENDING,
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        seller: { kycStatus: "approved" },
-      };
+      const pendingInvoice = { ...publishableInvoice, status: InvoiceStatus.PENDING };
       mockInvoiceRepository.findOne.mockResolvedValue(pendingInvoice);
       const publishedInvoice = { ...pendingInvoice, status: InvoiceStatus.PUBLISHED };
       mockInvoiceRepository.save.mockResolvedValue(publishedInvoice);
@@ -446,8 +438,7 @@ describe("InvoiceService", () => {
 
     it("should reject publish for seller without KYC approval", async () => {
       const invoiceWithPendingKYC = {
-        ...mockInvoice,
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        ...publishableInvoice,
         seller: { kycStatus: "pending" },
       };
       mockInvoiceRepository.findOne.mockResolvedValue(invoiceWithPendingKYC);
@@ -461,6 +452,22 @@ describe("InvoiceService", () => {
         code: "kyc_approval_required",
         statusCode: 403,
       });
+    });
+
+    it("should reject publishing an invoice that fails pre-publish validation", async () => {
+      const invalidInvoice = { ...publishableInvoice, ipfsHash: null };
+      mockInvoiceRepository.findOne.mockResolvedValue(invalidInvoice);
+
+      await expect(
+        invoiceService.publishInvoice({
+          invoiceId: "invoice-123",
+          sellerId: "seller-456",
+        }),
+      ).rejects.toMatchObject({
+        code: "invoice_not_publishable",
+        statusCode: 400,
+      });
+      expect(mockInvoiceRepository.save).not.toHaveBeenCalled();
     });
   });
 

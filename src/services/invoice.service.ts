@@ -3,7 +3,7 @@ import { Invoice } from "../models/Invoice.model";
 import { User } from "../models/User.model";
 import { InvoiceStatus, KYCStatus } from "../types/enums";
 import { ServiceError } from "../utils/service-error";
-import { validateInvoiceForPublish } from "../lib/invoice-validation";
+import { validateInvoiceForPublish } from "../lib/validate-invoice-for-publish";
 import type { IPFSService, IPFSUploadResult } from "./ipfs.service";
 
 export interface InvoiceRepositoryContract {
@@ -347,7 +347,14 @@ export class InvoiceService {
       );
     }
 
-    validateInvoiceForPublish(invoice);
+    const validationErrors = validateInvoiceForPublish(invoice);
+    if (validationErrors.length > 0) {
+      throw new ServiceError(
+        "invoice_not_publishable",
+        `Invoice failed pre-publish validation: ${validationErrors.map((e) => e.message).join(" ")}`,
+        400,
+      );
+    }
 
     invoice.status = InvoiceStatus.PUBLISHED;
     const updated = await this.invoiceRepository.save(invoice);

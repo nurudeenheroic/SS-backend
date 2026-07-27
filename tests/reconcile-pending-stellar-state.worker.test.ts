@@ -8,7 +8,7 @@ import { ServiceError } from "../src/utils/service-error";
 import type { PaymentVerificationResult } from "../src/services/stellar/verify-payment.service";
 
 interface LogEntry {
-  level: "info" | "warn" | "error";
+  level: "debug" | "info" | "warn" | "error";
   message: string;
   metadata: LogMetadata;
 }
@@ -18,6 +18,17 @@ class CaptureLogger implements AppLogger {
     readonly entries: LogEntry[] = [],
     private readonly defaultMetadata: LogMetadata = {},
   ) {}
+
+  debug(message: string, metadata: LogMetadata = {}): void {
+    this.entries.push({
+      level: "debug",
+      message,
+      metadata: {
+        ...this.defaultMetadata,
+        ...metadata,
+      },
+    });
+  }
 
   info(message: string, metadata: LogMetadata = {}): void {
     this.entries.push({

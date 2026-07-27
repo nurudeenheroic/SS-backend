@@ -3,6 +3,9 @@ import { Investment } from "../../models/Investment.model";
 import { Transaction } from "../../models/Transaction.model";
 import { InvestmentStatus, TransactionStatus, TransactionType } from "../../types/enums";
 import { ServiceError } from "../../utils/service-error";
+import type { AppLogger } from "../../observability/logger";
+
+const ESCROW_FUNDING_FUNCTION_NAME = "prepare_investment_funding";
 
 export interface SorobanEscrowFundingInput {
   investmentId: string;
@@ -15,6 +18,8 @@ export interface SorobanEscrowFundingDraft {
   contractId: string;
   xdr: string;
   expiresAt: string;
+  txHash: string;
+  ledger: number;
 }
 
 export interface SorobanEscrowClient {
@@ -58,12 +63,27 @@ interface OrchestrateInvestmentFundingServiceDependencies {
     contractId: string | null;
     fundingMode: "wallet_xdr";
   };
+  logger?: AppLogger;
 }
 
+const NOOP_LOGGER: AppLogger = {
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+  child: () => NOOP_LOGGER,
+};
+
 export class OrchestrateInvestmentFundingService {
+  private readonly logger: AppLogger;
+
   constructor(
     private readonly dependencies: OrchestrateInvestmentFundingServiceDependencies,
-  ) {}
+  ) {
+    this.logger = (dependencies.logger ?? NOOP_LOGGER).child({
+      component: "soroban-escrow-funding",
+    });
+  }
 
   async orchestrateFunding(
     investmentId: string,
@@ -109,11 +129,41 @@ export class OrchestrateInvestmentFundingService {
       );
     }
 
-    const draft = await this.dependencies.sorobanEscrowClient.prepareInvestmentFunding({
-      investmentId: investment.id,
-      invoiceId: investment.invoiceId,
-      investorId: investment.investorId,
-      amount: investment.investmentAmount,
+    const submittedAt = new Date().toISOString();
+
+    this.logger.debug("Submitting Soroban escrow transaction.", {
+      contract_id: contractId,
+      function_name: ESCROW_FUNDING_FUNCTION_NAME,
+      invoice_id: investment.invoiceId,
+      submitted_at: submittedAt,
+    });
+
+    let draft: SorobanEscrowFundingDraft;
+    try {
+      draft = await this.dependencies.sorobanEscrowClient.prepareInvestmentFunding({
+        investmentId: investment.id,
+        invoiceId: investment.invoiceId,
+        investorId: investment.investorId,
+        amount: investment.investmentAmount,
+      });
+    } catch (error) {
+      this.logger.warn("Soroban escrow transaction submission failed.", {
+        contract_id: contractId,
+        function_name: ESCROW_FUNDING_FUNCTION_NAME,
+        invoice_id: investment.invoiceId,
+        submitted_at: submittedAt,
+        error_reason: error instanceof Error ? error.message : "Unknown error",
+      });
+      throw error;
+    }
+
+    this.logger.info("Soroban escrow transaction confirmed.", {
+      contract_id: contractId,
+      function_name: ESCROW_FUNDING_FUNCTION_NAME,
+      invoice_id: investment.invoiceId,
+      tx_hash: draft.txHash,
+      ledger: draft.ledger,
+      confirmed_at: new Date().toISOString(),
     });
 
     return this.dependencies.transactionRunner.runInTransaction(async (unitOfWork) => {
@@ -204,6 +254,7 @@ export function createOrchestrateInvestmentFundingService(
   dataSource: DataSource,
   sorobanEscrowClient: SorobanEscrowClient,
   config: OrchestrateInvestmentFundingServiceDependencies["config"],
+  logger?: AppLogger,
 ): OrchestrateInvestmentFundingService {
   return new OrchestrateInvestmentFundingService({
     investmentReader: new TypeOrmInvestmentFundingReader(
@@ -212,5 +263,6 @@ export function createOrchestrateInvestmentFundingService(
     transactionRunner: new TypeOrmFundingTransactionRunner(dataSource),
     sorobanEscrowClient,
     config,
+    logger,
   });
 }
