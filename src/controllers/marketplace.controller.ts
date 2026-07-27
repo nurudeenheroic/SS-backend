@@ -17,6 +17,7 @@ const getInvoicesSchema = Joi.object({
   maxAmount: Joi.number().min(0).optional(),
   sort: Joi.string().valid("due_date", "discount_rate", "amount", "created_at").default("due_date"),
   sortOrder: Joi.string().valid("ASC", "DESC").default("ASC"),
+  search: Joi.string().trim().max(255).optional(),
 });
 
 export interface GetInvoicesRequest extends Request {
@@ -58,6 +59,7 @@ export function createMarketplaceController(marketplaceService: MarketplaceServi
           maxAmount: value.maxAmount,
           sort: value.sort,
           sortOrder: value.sortOrder,
+          search: value.search,
         };
 
         // Validate amount range
