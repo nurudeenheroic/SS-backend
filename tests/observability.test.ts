@@ -5,7 +5,7 @@ import { MetricsRegistry } from "../src/observability/metrics";
 import type { AuthService } from "../src/services/auth.service";
 
 interface LogEntry {
-  level: "info" | "warn" | "error";
+  level: "debug" | "info" | "warn" | "error";
   message: string;
   metadata: LogMetadata;
 }
@@ -15,6 +15,17 @@ class CaptureLogger implements AppLogger {
     readonly entries: LogEntry[] = [],
     private readonly defaultMetadata: LogMetadata = {},
   ) {}
+
+  debug(message: string, metadata: LogMetadata = {}): void {
+    this.entries.push({
+      level: "debug",
+      message,
+      metadata: {
+        ...this.defaultMetadata,
+        ...metadata,
+      },
+    });
+  }
 
   info(message: string, metadata: LogMetadata = {}): void {
     this.entries.push({

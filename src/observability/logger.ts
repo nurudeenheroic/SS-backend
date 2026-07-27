@@ -3,6 +3,7 @@ import winston from "winston";
 export type LogMetadata = Record<string, unknown>;
 
 export interface AppLogger {
+  debug(message: string, metadata?: LogMetadata): void;
   info(message: string, metadata?: LogMetadata): void;
   warn(message: string, metadata?: LogMetadata): void;
   error(message: string, metadata?: LogMetadata): void;
@@ -11,6 +12,10 @@ export interface AppLogger {
 
 class WinstonAppLogger implements AppLogger {
   constructor(private readonly baseLogger: winston.Logger) {}
+
+  debug(message: string, metadata: LogMetadata = {}): void {
+    this.baseLogger.debug(message, metadata);
+  }
 
   info(message: string, metadata: LogMetadata = {}): void {
     this.baseLogger.info(message, metadata);
