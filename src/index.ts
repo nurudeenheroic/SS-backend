@@ -12,6 +12,7 @@ import { createInvoiceService } from "./services/invoice.service";
 import { createIPFSService } from "./services/ipfs.service";
 import { createInvestmentService } from "./services/investment.service";
 import { createSettlementService } from "./services/settlement.service";
+import { createMarketplaceService } from "./services/marketplace.service";
 
 export async function bootstrap(): Promise<{ server: Server }> {
   const config = getConfig();
@@ -26,6 +27,7 @@ export async function bootstrap(): Promise<{ server: Server }> {
   const invoiceService = createInvoiceService(dataSource, ipfsService);
   const investmentService = createInvestmentService(dataSource);
   const settlementService = createSettlementService(dataSource);
+  const marketplaceService = createMarketplaceService(dataSource);
 
   const app = createApp({
     authService,
@@ -33,6 +35,7 @@ export async function bootstrap(): Promise<{ server: Server }> {
     invoiceService,
     investmentService,
     settlementService,
+    marketplaceService,
     config,
     logger,
     metricsEnabled: config.observability.metricsEnabled,

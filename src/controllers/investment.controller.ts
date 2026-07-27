@@ -31,6 +31,7 @@ export class InvestmentController {
         invoiceId,
         investorId: user.id,
         investmentAmount,
+        investorWallet: user.stellarAddress,
       });
 
       return res.status(201).json({

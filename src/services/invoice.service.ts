@@ -4,6 +4,8 @@ import { User } from "../models/User.model";
 import { InvoiceStatus, KYCStatus } from "../types/enums";
 import { ServiceError } from "../utils/service-error";
 import { validateInvoiceForPublish } from "../lib/validate-invoice-for-publish";
+import { logInvoiceTransition } from "../lib/invoice-lifecycle-log";
+import { logger } from "../observability/logger";
 import type { IPFSService, IPFSUploadResult } from "./ipfs.service";
 
 export interface InvoiceRepositoryContract {
@@ -356,8 +358,18 @@ export class InvoiceService {
       );
     }
 
+    const previousStatus = invoice.status;
     invoice.status = InvoiceStatus.PUBLISHED;
     const updated = await this.invoiceRepository.save(invoice);
+
+    logInvoiceTransition(logger, {
+      invoiceId: updated.id,
+      fromState: previousStatus,
+      toState: InvoiceStatus.PUBLISHED,
+      actorWallet: seller.stellarAddress,
+      reason: "seller_published",
+    });
+
     return this.toDTO(updated);
   }
 

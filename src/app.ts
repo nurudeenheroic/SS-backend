@@ -14,12 +14,14 @@ import { createNotificationRouter } from "./routes/notification.routes";
 import { createInvoiceRouter } from "./routes/invoice.routes";
 import { createInvestmentRouter } from "./routes/investment.routes";
 import { createSettlementRouter } from "./routes/settlement.routes";
+import { createMarketplaceRouter } from "./routes/marketplace.routes";
 
 import type { AuthService } from "./services/auth.service";
 import type { NotificationService } from "./services/notification.service";
 import type { InvoiceService } from "./services/invoice.service";
 import type { InvestmentService } from "./services/investment.service";
 import type { SettlementService } from "./services/settlement.service";
+import type { MarketplaceService } from "./services/marketplace.service";
 
 import dataSource from "./config/database";
 
@@ -55,6 +57,7 @@ export interface AppDependencies {
   invoiceService?: InvoiceService;
   investmentService?: InvestmentService;
   settlementService?: SettlementService;
+  marketplaceService?: MarketplaceService;
   logger?: AppLogger;
   metricsEnabled?: boolean;
   metricsRegistry?: MetricsRegistry;
@@ -79,6 +82,7 @@ export function createApp({
   invoiceService,
   investmentService,
   settlementService,
+  marketplaceService,
   logger: appLogger = logger,
   metricsEnabled = true,
   metricsRegistry = new MetricsRegistry(),
@@ -179,6 +183,10 @@ export function createApp({
 
   if (settlementService) {
     app.use("/api/v1/settlements", createSettlementRouter({ settlementService }));
+  }
+
+  if (marketplaceService) {
+    app.use("/api/v1/marketplace", createMarketplaceRouter({ marketplaceService }));
   }
 
   app.use(notFoundMiddleware);
