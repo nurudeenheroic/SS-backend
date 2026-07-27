@@ -74,8 +74,8 @@ describe("Invoice Publish KYC Integration Test", () => {
     await dataSource.initialize();
 
     // Clean up any rows left by a previous run before inserting fresh seed data.
-    await dataSource.getRepository(Invoice).delete({});
-    await dataSource.getRepository(User).delete({});
+    await dataSource.getRepository(Invoice).clear();
+    await dataSource.getRepository(User).clear();
 
     // Create test users with different KYC statuses
     const userRepository = dataSource.getRepository(User);
