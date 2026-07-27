@@ -38,10 +38,17 @@ describe("Invoice Publish KYC Integration Test", () => {
   };
 
   beforeAll(async () => {
-    // Set up in-memory SQLite database
+    // Use PostgreSQL when DATABASE_URL is available (CI); skip locally without it.
+    const databaseUrl = process.env.DATABASE_URL;
+
+    if (!databaseUrl) {
+      console.warn("DATABASE_URL not set, skipping KYC integration tests");
+      return;
+    }
+
     dataSource = new DataSource({
-      type: "sqlite",
-      database: ":memory:",
+      type: "postgres",
+      url: databaseUrl,
       entities: [
         User,
         Invoice,
@@ -53,6 +60,7 @@ describe("Invoice Publish KYC Integration Test", () => {
       ],
       synchronize: true,
       logging: false,
+      dropSchema: true,
     });
 
     await dataSource.initialize();

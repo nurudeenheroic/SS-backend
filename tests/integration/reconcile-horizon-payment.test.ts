@@ -350,8 +350,13 @@ describe("Horizon Reconciliation Worker Integration Test", () => {
         return;
       }
 
-      // Create investment with pending payment
       const investmentRepository = dataSource.getRepository(Investment);
+
+      // Remove any PENDING investments left from previous tests so the worker
+      // only processes the one investment we create here.
+      await investmentRepository.delete({ status: InvestmentStatus.PENDING });
+
+      // Create investment with pending payment
       const _investment = await investmentRepository.save(
         investmentRepository.create({
           invoiceId: invoice.id,
