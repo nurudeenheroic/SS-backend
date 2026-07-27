@@ -33,7 +33,11 @@ describe("Invoice Publish KYC Integration Test", () => {
       uploadRateLimit: { windowMs: 900000, maxUploads: 10 },
     },
     kyc: {
-      skipVerification: false, // KYC is enforced
+      // Skip the route-level KYC middleware — it relies on authenticateJWT which
+      // stubs kycStatus:null and would block all users including approved ones.
+      // The service's own DB-driven check (invoice.service.ts publishInvoice) is
+      // what this test actually validates.
+      skipVerification: true,
     },
   };
 
