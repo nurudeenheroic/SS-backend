@@ -5,6 +5,8 @@ import { Investment } from "../src/models/Investment.model";
 import { InvoiceStatus, InvestmentStatus } from "../src/types/enums";
 import { ServiceError } from "../src/utils/service-error";
 
+const INVESTOR_WALLET = "GINVESTORWALLET1234567890ABCDEFGHIJKLMNOPQRSTUV";
+
 describe("InvestmentService", () => {
   let mockDataSource: jest.Mocked<DataSource>;
   let mockEntityManager: jest.Mocked<EntityManager>;
@@ -51,6 +53,7 @@ describe("InvestmentService", () => {
       invoiceId: "invoice-1",
       investorId: "investor-1",
       investmentAmount: "475.0000",
+      investorWallet: INVESTOR_WALLET,
     };
 
     const result = await investmentService.createInvestment(input);
@@ -74,6 +77,7 @@ describe("InvestmentService", () => {
       invoiceId: "invoice-1",
       investorId: "investor-1",
       investmentAmount: "950.0000",
+      investorWallet: INVESTOR_WALLET,
     };
 
     await investmentService.createInvestment(input);
@@ -93,6 +97,7 @@ describe("InvestmentService", () => {
       invoiceId: "invoice-1",
       investorId: "investor-1",
       investmentAmount: "500.0000", // 500 + 500 > 950
+      investorWallet: INVESTOR_WALLET,
     };
 
     await expect(investmentService.createInvestment(input)).rejects.toThrow(
@@ -108,6 +113,7 @@ describe("InvestmentService", () => {
       invoiceId: "invoice-1",
       investorId: "seller-1", // Same as invoice seller
       investmentAmount: "100.0000",
+      investorWallet: INVESTOR_WALLET,
     };
 
     await expect(investmentService.createInvestment(input)).rejects.toThrow(
@@ -120,6 +126,7 @@ describe("InvestmentService", () => {
       invoiceId: "invoice-1",
       investorId: "investor-1",
       investmentAmount: "-100.0000",
+      investorWallet: INVESTOR_WALLET,
     };
 
     await expect(investmentService.createInvestment(input)).rejects.toThrow(

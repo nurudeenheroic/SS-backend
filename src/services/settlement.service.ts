@@ -4,10 +4,15 @@ import { Invoice } from "../models/Invoice.model";
 import { Investment } from "../models/Investment.model";
 import { InvoiceStatus, InvestmentStatus } from "../types/enums";
 import { ServiceError } from "../utils/service-error";
+import { computeInvestorReturn } from "../lib/investor-return";
+import { decimalStringToScaledBigInt, scaledBigIntToDecimalString } from "../lib/decimal-bigint";
+import { logInvoiceTransition } from "../lib/invoice-lifecycle-log";
+import { logger } from "../observability/logger";
 
 export interface SettleInvoiceInput {
   invoiceId: string;
   proceeds: string;
+  actorWallet: string;
 }
 
 export interface InvestorSettlement {
@@ -32,7 +37,7 @@ export class SettlementService {
    * pro-rata to their share of the invoice's face value.
    */
   async settleInvoice(input: SettleInvoiceInput): Promise<SettleInvoiceResult> {
-    const { invoiceId, proceeds: proceedsInput } = input;
+    const { invoiceId, proceeds: proceedsInput, actorWallet } = input;
 
     const proceeds = new Decimal(proceedsInput);
     if (proceeds.isNegative() || proceeds.isZero()) {
@@ -74,18 +79,24 @@ export class SettlementService {
         );
       }
 
-      // 4. Distribute proceeds pro-rata to each investor's share of the face value
-      const faceValue = new Decimal(invoice.amount);
+      // 4. Distribute proceeds pro-rata to each investor's share of the total funded amount
+      const totalFunded = investments.reduce(
+        (sum, investment) => sum.plus(new Decimal(investment.investmentAmount)),
+        new Decimal(0),
+      );
+      const totalFundedScaled = decimalStringToScaledBigInt(totalFunded.toFixed(4));
+      const proceedsScaled = decimalStringToScaledBigInt(proceeds.toFixed(4));
       const settlements: InvestorSettlement[] = [];
 
       for (const investment of investments) {
-        const investmentAmount = new Decimal(investment.investmentAmount);
-        const actualReturn = investmentAmount
-          .times(proceeds)
-          .dividedBy(faceValue)
-          .toDecimalPlaces(4);
+        const investmentAmountScaled = decimalStringToScaledBigInt(investment.investmentAmount);
+        const actualReturnScaled = computeInvestorReturn(
+          investmentAmountScaled,
+          totalFundedScaled,
+          proceedsScaled,
+        );
 
-        investment.actualReturn = actualReturn.toFixed(4);
+        investment.actualReturn = scaledBigIntToDecimalString(actualReturnScaled);
         investment.status = InvestmentStatus.SETTLED;
         await transactionalEntityManager.save(Investment, investment);
 
@@ -98,8 +109,17 @@ export class SettlementService {
       }
 
       // 5. Transition invoice to SETTLED
+      const previousStatus = invoice.status;
       invoice.status = InvoiceStatus.SETTLED;
       await transactionalEntityManager.save(Invoice, invoice);
+
+      logInvoiceTransition(logger, {
+        invoiceId: invoice.id,
+        fromState: previousStatus,
+        toState: InvoiceStatus.SETTLED,
+        actorWallet,
+        reason: "admin_settled",
+      });
 
       return {
         invoiceId: invoice.id,

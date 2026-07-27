@@ -4,6 +4,8 @@ import { Investment } from "../models/Investment.model";
 import { InvoiceStatus, InvestmentStatus } from "../types/enums";
 import { ServiceError } from "../utils/service-error";
 import { Decimal } from "decimal.js";
+import { logInvoiceTransition } from "../lib/invoice-lifecycle-log";
+import { logger } from "../observability/logger";
 
 // Formula for expected return:
 // Investor's share of the invoice face value (amount) proportional to their contribution to the fundable amount (netAmount).
@@ -14,6 +16,7 @@ export interface CreateInvestmentInput {
   invoiceId: string;
   investorId: string;
   investmentAmount: string;
+  investorWallet: string;
 }
 
 export interface InvestorDashboard {
@@ -69,7 +72,7 @@ export class InvestmentService {
    * Uses a database transaction with a row-level lock on the invoice to prevent over-subscription.
    */
   async createInvestment(input: CreateInvestmentInput): Promise<Investment> {
-    const { invoiceId, investorId, investmentAmount } = input;
+    const { invoiceId, investorId, investmentAmount, investorWallet } = input;
 
     // Validate investment amount
     const amount = new Decimal(investmentAmount);
@@ -145,8 +148,17 @@ export class InvestmentService {
       // 7. Transition invoice to FUNDED if fully subscribed
       const newTotalInvested = totalInvested.plus(amount);
       if (newTotalInvested.gte(netAmount)) {
+        const previousStatus = invoice.status;
         invoice.status = InvoiceStatus.FUNDED;
         await transactionalEntityManager.save(Invoice, invoice);
+
+        logInvoiceTransition(logger, {
+          invoiceId: invoice.id,
+          fromState: previousStatus,
+          toState: InvoiceStatus.FUNDED,
+          actorWallet: investorWallet,
+          reason: "fully_funded",
+        });
       }
 
       return savedInvestment;

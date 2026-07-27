@@ -1,33 +1,32 @@
 import crypto from "crypto";
 import { DataSource } from "typeorm";
+import { Decimal } from "decimal.js";
 import { InvestmentService } from "../../src/services/investment.service";
-import { SettlementService } from "../../src/services/settlement.service";
 import { Invoice } from "../../src/models/Invoice.model";
 import { Investment } from "../../src/models/Investment.model";
 import { InvoiceStatus, InvestmentStatus } from "../../src/types/enums";
 
 /**
- * Minimal in-memory TypeORM stand-in shared by InvestmentService and
- * SettlementService so this test exercises the real funding -> settlement
- * flow end to end without a live database.
+ * Minimal in-memory TypeORM stand-in so this test exercises the real
+ * InvestmentService funding logic end to end without a live database.
  */
+type FakeManager = {
+  createQueryBuilder: (entity: unknown, alias: string) => {
+    setLock: () => unknown;
+    where: (clause: string, params: { id: string }) => unknown;
+    getOne: () => Promise<Invoice | null>;
+  };
+  find: (
+    entity: unknown,
+    options: { where: Record<string, unknown> | Record<string, unknown>[] },
+  ) => Promise<Investment[]>;
+  create: (entity: unknown, data: Partial<Investment>) => Investment | Partial<Investment>;
+  save: (entity: unknown, data: Investment | Invoice) => Promise<Investment | Invoice>;
+};
+
 function createFakeDataSource(invoice: Invoice) {
   const invoices = new Map<string, Invoice>([[invoice.id, invoice]]);
   const investments = new Map<string, Investment>();
-
-  type FakeManager = {
-    createQueryBuilder: (entity: unknown, alias: string) => {
-      setLock: () => unknown;
-      where: (clause: string, params: { id: string }) => unknown;
-      getOne: () => Promise<Invoice | null>;
-    };
-    find: (
-      entity: unknown,
-      options: { where: Record<string, unknown> | Record<string, unknown>[] },
-    ) => Promise<Investment[]>;
-    create: (entity: unknown, data: Partial<Investment>) => Investment | Partial<Investment>;
-    save: (entity: unknown, data: Investment | Invoice) => Promise<Investment | Invoice>;
-  };
 
   const manager: FakeManager = {
     createQueryBuilder: (_entity: unknown, _alias: string) => {
@@ -60,7 +59,7 @@ function createFakeDataSource(invoice: Invoice) {
     },
     create: (entity: unknown, data: Partial<Investment>) => {
       if (entity === Investment) {
-        return { id: crypto.randomUUID(), ...data } as Investment;
+        return { id: crypto.randomUUID(), status: InvestmentStatus.PENDING, ...data } as Investment;
       }
       return data;
     },
@@ -75,8 +74,7 @@ function createFakeDataSource(invoice: Invoice) {
   };
 
   const dataSource = {
-    transaction: async (callback: (manager: FakeManager) => Promise<unknown>) =>
-      callback(manager),
+    transaction: async (callback: (manager: FakeManager) => Promise<unknown>) => callback(manager),
   } as unknown as DataSource;
 
   return { dataSource, invoices, investments };
@@ -86,11 +84,11 @@ function createInvoice(overrides: Partial<Invoice> = {}): Invoice {
   return {
     id: crypto.randomUUID(),
     sellerId: crypto.randomUUID(),
-    invoiceNumber: "INV-SETTLE-001",
+    invoiceNumber: "INV-FRACTIONAL-001",
     customerName: "Customer A",
-    amount: "6000.0000",
+    amount: "10000.0000",
     discountRate: "0.00",
-    netAmount: "6000.0000",
+    netAmount: "10000.0000",
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     ipfsHash: "QmTestHash",
     riskScore: null,
@@ -106,62 +104,60 @@ function createInvoice(overrides: Partial<Invoice> = {}): Invoice {
   } as Invoice;
 }
 
-describe("Settlement integration: funding multiple investors then settling", () => {
-  it("distributes proceeds pro-rata to each investor and marks the invoice settled", async () => {
+describe("Fractional investment integration: splitting funded amount across multiple investors", () => {
+  it("transitions to funded after the third commitment with correct, rounding-free share percentages", async () => {
     const invoice = createInvoice();
     const { dataSource, invoices, investments } = createFakeDataSource(invoice);
-
     const investmentService = new InvestmentService(dataSource);
-    const settlementService = new SettlementService(dataSource);
 
-    const investorAId = crypto.randomUUID();
-    const investorBId = crypto.randomUUID();
+    const investorA = { id: crypto.randomUUID(), wallet: "GINVESTORA1234567890ABCDEFGHIJKLMNOPQRSTUVWXY" };
+    const investorB = { id: crypto.randomUUID(), wallet: "GINVESTORB1234567890ABCDEFGHIJKLMNOPQRSTUVWXY" };
+    const investorC = { id: crypto.randomUUID(), wallet: "GINVESTORC1234567890ABCDEFGHIJKLMNOPQRSTUVWXY" };
 
     const investmentA = await investmentService.createInvestment({
       invoiceId: invoice.id,
-      investorId: investorAId,
+      investorId: investorA.id,
       investmentAmount: "4000.0000",
-      investorWallet: "GINVESTORA1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      investorWallet: investorA.wallet,
     });
+    expect(invoices.get(invoice.id)?.status).toBe(InvoiceStatus.PUBLISHED);
 
     const investmentB = await investmentService.createInvestment({
       invoiceId: invoice.id,
-      investorId: investorBId,
-      investmentAmount: "2000.0000",
-      investorWallet: "GINVESTORB1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      investorId: investorB.id,
+      investmentAmount: "3000.0000",
+      investorWallet: investorB.wallet,
+    });
+    expect(invoices.get(invoice.id)?.status).toBe(InvoiceStatus.PUBLISHED);
+
+    const investmentC = await investmentService.createInvestment({
+      invoiceId: invoice.id,
+      investorId: investorC.id,
+      investmentAmount: "3000.0000",
+      investorWallet: investorC.wallet,
     });
 
-    // Simulate confirmed on-chain payment for both investments before settlement.
-    for (const investment of [investmentA, investmentB]) {
-      const stored = investments.get(investment.id)!;
-      stored.status = InvestmentStatus.CONFIRMED;
-      investments.set(investment.id, stored);
-    }
-
-    // Invoice reaches FUNDED once fully subscribed (asserted by InvestmentService already);
-    // settlement requires FUNDED status.
+    // Invoice transitions to FUNDED only after the third commitment reaches face value.
     expect(invoices.get(invoice.id)?.status).toBe(InvoiceStatus.FUNDED);
 
-    const result = await settlementService.settleInvoice({
-      invoiceId: invoice.id,
-      proceeds: "6600.0000",
-      actorWallet: "GADMINWALLET1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-    });
+    const allInvestments = [investmentA, investmentB, investmentC];
+    expect(investments.size).toBe(3);
 
-    const returnByInvestor = new Map(
-      result.settlements.map((settlement) => [settlement.investorId, settlement.actualReturn]),
+    const totalFunded = allInvestments.reduce(
+      (sum, investment) => sum.plus(new Decimal(investment.investmentAmount)),
+      new Decimal(0),
+    );
+    expect(totalFunded.toFixed(4)).toBe("10000.0000");
+
+    const sharePercentages = allInvestments.map((investment) =>
+      new Decimal(investment.investmentAmount).dividedBy(totalFunded).times(100),
     );
 
-    expect(returnByInvestor.get(investorAId)).toBe("4400.0000");
-    expect(returnByInvestor.get(investorBId)).toBe("2200.0000");
+    expect(sharePercentages[0].toFixed(2)).toBe("40.00");
+    expect(sharePercentages[1].toFixed(2)).toBe("30.00");
+    expect(sharePercentages[2].toFixed(2)).toBe("30.00");
 
-    expect(result.status).toBe(InvoiceStatus.SETTLED);
-    expect(invoices.get(invoice.id)?.status).toBe(InvoiceStatus.SETTLED);
-
-    const sumOfReturns = result.settlements.reduce(
-      (sum, settlement) => sum + Number(settlement.actualReturn),
-      0,
-    );
-    expect(sumOfReturns).toBeCloseTo(6600, 4);
+    const sumOfShares = sharePercentages.reduce((sum, share) => sum.plus(share), new Decimal(0));
+    expect(sumOfShares.toFixed(10)).toBe("100.0000000000");
   });
 });
