@@ -6,6 +6,7 @@ import type { InvoiceService } from "../services/invoice.service";
 import type { AppConfig } from "../config/env";
 import { createInvoiceController } from "../controllers/invoice.controller";
 import { authenticateJWT, requireKYC } from "../middleware/auth.middleware";
+import { createWalletRateLimiter } from "../middleware/rate-limit-wallet.middleware";
 import { HttpError } from "../utils/http-error";
 
 export interface InvoiceRouterDependencies {
@@ -154,6 +155,12 @@ export function createInvoiceRouter({
 
   const kycGating = requireKYC(config.kyc.skipVerification);
 
+  // Per-wallet rate limit: max 5 invoice publishes per 60 seconds
+  const publishRateLimiter = createWalletRateLimiter(
+    { windowMs: 60_000, maxRequests: 5 },
+    "invoice-publish",
+  );
+
   // ============ INVOICE CRUD ENDPOINTS ============
 
   // GET /api/v1/invoices - List invoices for authenticated seller
@@ -193,6 +200,7 @@ export function createInvoiceRouter({
     "/:id/publish",
     authenticateJWT,
     kycGating,
+    publishRateLimiter,
     controller.publishInvoice,
   );
 

@@ -186,7 +186,7 @@ export class AuthService {
       throw new HttpError(401, "Invalid token payload.");
     }
 
-    const user = await this.userRepository.findById(payload.sub);
+    const user = await this.userRepository.findByStellarAddress(payload.sub);
 
     if (!user) {
       throw new HttpError(401, "User no longer exists.");
@@ -225,14 +225,14 @@ export class AuthService {
       this.config.jwt.secret,
       {
         ...signOptions,
-        subject: user.id,
+        subject: user.stellarAddress,
       },
     );
   }
 }
 
 class TypeOrmUserRepository implements UserRepositoryContract {
-  constructor(private readonly repository: Repository<User>) {}
+  constructor(private readonly repository: Repository<User>) { }
 
   findById(id: string): Promise<User | null> {
     return this.repository.findOne({
@@ -253,7 +253,7 @@ class TypeOrmUserRepository implements UserRepositoryContract {
 }
 
 class TypeOrmChallengeRepository implements ChallengeRepositoryContract {
-  constructor(private readonly repository: Repository<AuthChallenge>) {}
+  constructor(private readonly repository: Repository<AuthChallenge>) { }
 
   async create(input: CreateChallengeRecordInput): Promise<ChallengeRecord> {
     const entity = this.repository.create({
