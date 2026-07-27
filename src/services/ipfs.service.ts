@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config/env";
 import { ServiceError } from "../utils/service-error";
+import type { AppLogger } from "../observability/logger";
 
 export interface IPFSUploadResult {
   hash: string;
@@ -9,6 +10,7 @@ export interface IPFSUploadResult {
 
 export interface IPFSServiceDependencies {
   config: AppConfig["ipfs"];
+  logger: AppLogger;
   fetchImplementation?: typeof fetch;
 }
 
@@ -20,10 +22,12 @@ export interface PinataResponse {
 
 export class IPFSService {
   private readonly config: AppConfig["ipfs"];
+  private readonly logger: AppLogger;
   private readonly fetchImplementation: typeof fetch;
 
   constructor(dependencies: IPFSServiceDependencies) {
     this.config = dependencies.config;
+    this.logger = dependencies.logger;
     this.fetchImplementation = dependencies.fetchImplementation ?? fetch;
   }
 
@@ -31,6 +35,7 @@ export class IPFSService {
     fileBuffer: Buffer,
     filename: string,
     mimeType: string,
+    invoiceId?: string
   ): Promise<IPFSUploadResult> {
     // Validate file size
     const fileSizeMB = fileBuffer.length / (1024 * 1024);
@@ -38,7 +43,7 @@ export class IPFSService {
       throw new ServiceError(
         "file_too_large",
         `File size ${fileSizeMB.toFixed(2)}MB exceeds maximum allowed size of ${this.config.maxFileSizeMB}MB`,
-        400,
+        400
       );
     }
 
@@ -47,7 +52,7 @@ export class IPFSService {
       throw new ServiceError(
         "invalid_file_type",
         `File type ${mimeType} is not allowed. Allowed types: ${this.config.allowedMimeTypes.join(", ")}`,
-        400,
+        400
       );
     }
 
@@ -64,19 +69,34 @@ export class IPFSService {
             Authorization: `Bearer ${this.config.jwt}`,
           },
           body: formData,
-        },
+        }
       );
 
       if (!response.ok) {
         const errorText = await response.text();
+        const errorReason = `${response.status} ${response.statusText}`;
+
+        this.logger.warn("IPFS document upload failed", {
+          invoice_id: invoiceId,
+          error_reason: errorReason,
+          failed_at: new Date().toISOString(),
+        });
+
         throw new ServiceError(
           "ipfs_upload_failed",
-          `IPFS upload failed: ${response.status} ${response.statusText} - ${errorText}`,
-          502,
+          `IPFS upload failed: ${errorReason} - ${errorText}`,
+          502
         );
       }
 
-      const result = await response.json() as PinataResponse;
+      const result = (await response.json()) as PinataResponse;
+
+      this.logger.info("IPFS document upload completed", {
+        cid: result.IpfsHash,
+        invoice_id: invoiceId,
+        file_size_bytes: result.PinSize,
+        uploaded_at: result.Timestamp,
+      });
 
       return {
         hash: result.IpfsHash,
@@ -88,15 +108,23 @@ export class IPFSService {
         throw error;
       }
 
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+      this.logger.warn("IPFS document upload failed", {
+        invoice_id: invoiceId,
+        error_reason: errorMessage,
+        failed_at: new Date().toISOString(),
+      });
+
       throw new ServiceError(
         "ipfs_upload_error",
-        `Failed to upload file to IPFS: ${error instanceof Error ? error.message : "Unknown error"}`,
-        500,
+        `Failed to upload file to IPFS: ${errorMessage}`,
+        500
       );
     }
   }
 }
 
-export function createIPFSService(config: AppConfig["ipfs"]): IPFSService {
-  return new IPFSService({ config });
+export function createIPFSService(config: AppConfig["ipfs"], logger: AppLogger): IPFSService {
+  return new IPFSService({ config, logger });
 }
