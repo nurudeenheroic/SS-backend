@@ -119,7 +119,7 @@ describe("Settlement integration: rejecting settlement of non-fully-funded invoi
         proceeds: "6000.0000",
         actorWallet: "GADMIN",
       }),
-    ).rejects.toThrow(/INVALID_INVOICE_STATUS/);
+    ).rejects.toThrow(/Cannot settle an invoice with status published/);
   });
 
   it("should reject settlement of a partially funded invoice", async () => {
@@ -152,7 +152,7 @@ describe("Settlement integration: rejecting settlement of non-fully-funded invoi
         proceeds: "6000.0000",
         actorWallet: "GADMIN",
       }),
-    ).rejects.toThrow(/INVALID_INVOICE_STATUS/);
+    ).rejects.toThrow(/Cannot settle an invoice with status published/);
   });
 
   it("should succeed when invoice is fully funded", async () => {
@@ -255,5 +255,40 @@ describe("Settlement integration: funding multiple investors then settling", () 
       0,
     );
     expect(sumOfReturns).toBeCloseTo(6600, 4);
+  });
+});
+
+describe("Settlement integration: single investor 100% share", () => {
+  it("returns the full proceeds to the only investor", async () => {
+    const invoice = createInvoice();
+    const { dataSource, invoices, investments } = createFakeDataSource(invoice);
+
+    const investmentService = new InvestmentService(dataSource);
+    const settlementService = new SettlementService(dataSource);
+
+    const investorId = crypto.randomUUID();
+    const investment = await investmentService.createInvestment({
+      invoiceId: invoice.id,
+      investorId,
+      investmentAmount: "6000.0000",
+      investorWallet: "GINVESTOR100000000000000000000000000000000000000000000000",
+    });
+
+    const stored = investments.get(investment.id)!;
+    stored.status = InvestmentStatus.CONFIRMED;
+    investments.set(investment.id, stored);
+
+    expect(invoices.get(invoice.id)?.status).toBe(InvoiceStatus.FUNDED);
+
+    const result = await settlementService.settleInvoice({
+      invoiceId: invoice.id,
+      proceeds: "3300.0000",
+      actorWallet: "GADMINWALLET1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    });
+
+    expect(result.status).toBe(InvoiceStatus.SETTLED);
+    expect(result.settlements).toHaveLength(1);
+    expect(result.settlements[0]?.actualReturn).toBe("3300.0000");
+    expect(invoices.get(invoice.id)?.status).toBe(InvoiceStatus.SETTLED);
   });
 });

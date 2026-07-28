@@ -85,7 +85,7 @@ if (!isDevelopment) {
   startPoolMonitor(() => {
     try {
       // TypeORM exposes the underlying pg pool via driver.master/slave
-      const pool = (dataSource.driver as any)?.master;
+      const pool = (dataSource.driver as unknown as { master?: { totalCount: number; idleCount: number; waitingCount: number } })?.master;
       if (pool && typeof pool.totalCount === "number") {
         return { totalCount: pool.totalCount, idleCount: pool.idleCount, waitingCount: pool.waitingCount };
       }
