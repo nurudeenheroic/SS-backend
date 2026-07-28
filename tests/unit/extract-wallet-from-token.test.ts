@@ -42,6 +42,21 @@ describe("extractWalletFromToken", () => {
     expect(extractWalletFromToken(token, SECRET)).toBeNull();
   });
 
+  it("returns null when sub claim is a number", () => {
+    const token = jwt.sign({ sub: 12345 }, SECRET, { expiresIn: "1h" });
+    expect(extractWalletFromToken(token, SECRET)).toBeNull();
+  });
+
+  it("returns null when sub claim is an object", () => {
+    const token = jwt.sign({ sub: { wallet: "GABC" } }, SECRET, { expiresIn: "1h" });
+    expect(extractWalletFromToken(token, SECRET)).toBeNull();
+  });
+
+  it("returns the address for a valid Stellar address string sub", () => {
+    const token = jwt.sign({ sub: "GA5XZ7W7Z7W7Z7W7Z7W7Z7W7Z7W7Z7W7Z7W7Z7W7" }, SECRET, { expiresIn: "1h" });
+    expect(extractWalletFromToken(token, SECRET)).toBe("GA5XZ7W7Z7W7Z7W7Z7W7Z7W7Z7W7Z7W7Z7W7Z7W7");
+  });
+
   it("never throws", () => {
     expect(extractWalletFromToken("not.a.jwt", SECRET)).toBeNull();
     expect(extractWalletFromToken(undefined, "")).toBeNull();
