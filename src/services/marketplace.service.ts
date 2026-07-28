@@ -68,8 +68,8 @@ export class MarketplaceService {
       dueBefore: filters.dueBefore,
       minAmount: filters.minAmount,
       maxAmount: filters.maxAmount,
-      sort: filters.sort || "due_date",
-      sortOrder: filters.sortOrder || "ASC",
+      sort: filters.sort || "amount",
+      sortOrder: filters.sortOrder || "DESC",
       search: filters.search,
     };
 
