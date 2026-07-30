@@ -5,5 +5,6 @@ export function isValidStellarPublicKey(address: unknown): address is string {
 }
 
 export function isValidSorobanContractId(contractId: unknown): contractId is string {
-  return typeof contractId === "string" && StrKey.isValidContract(contractId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return typeof contractId === "string" && (StrKey as any).isValidContract(contractId);
 }

@@ -168,8 +168,7 @@ describe("isValidInvoiceStateTransition", () => {
     it("rejects all transitions from CANCELLED", () => {
       allStatuses.forEach((status) => {
         expect(
-          isValidInvoiceStateTransition(InvoiceStatus.CANCELLED, status),
-          `CANCELLED to ${status} should be invalid`
+          isValidInvoiceStateTransition(InvoiceStatus.CANCELLED, status)
         ).toBe(false);
       });
     });
