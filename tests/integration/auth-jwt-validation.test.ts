@@ -138,7 +138,6 @@ describe("JWT authentication validation", () => {
   it("rejects GET /api/v1/auth/me when the JWT is signed with an invalid secret key", async () => {
     const app = createTestApp();
 
-    // Forge a token signed with the wrong secret
     const forgedToken = jwt.sign(
       {
         sub: "GFORGED_STELLAR_ADDRESS",
@@ -158,6 +157,45 @@ describe("JWT authentication validation", () => {
       success: false,
       error: {
         message: "Invalid or expired token.",
+      },
+    });
+  });
+
+  it("rejects GET /api/v1/auth/me with expired JWT token", async () => {
+    const app = createTestApp();
+
+    const expiredToken = jwt.sign(
+      {
+        sub: "GEXPIRED_STELLAR_ADDRESS",
+        stellarAddress: "GEXPIRED_STELLAR_ADDRESS",
+        userId: crypto.randomUUID(),
+      },
+      VALID_JWT_SECRET,
+      { expiresIn: "-5m" },
+    );
+
+    const response = await request(app)
+      .get("/api/v1/auth/me")
+      .set("Authorization", `Bearer ${expiredToken}`)
+      .expect(401);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        message: "Invalid or expired token.",
+      },
+    });
+  });
+
+  it("returns 401 from /me when the bearer token is missing", async () => {
+    const app = createTestApp();
+
+    const response = await request(app).get("/api/v1/auth/me").expect(401);
+
+    expect(response.body).toMatchObject({
+      success: false,
+      error: {
+        message: "Authorization token is required.",
       },
     });
   });
