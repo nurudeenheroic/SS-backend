@@ -123,7 +123,7 @@ describe("validateInvoiceForPublish", () => {
 
     // Assert each error has the correct error code
     const errorCodes = errors.map((e) => e.code);
-    expect(errorCodes).toContain("FACE_VALUE_NOT_POSITIVE");
+    expect(errorCodes).toContain("FACE_VALUE_TOO_LOW");
     expect(errorCodes).toContain("DUE_DATE_TOO_SOON");
     expect(errorCodes).toContain("MISSING_DOCUMENT");
 

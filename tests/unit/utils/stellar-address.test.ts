@@ -3,7 +3,7 @@ import { isValidStellarPublicKey, isValidSorobanContractId } from "../../../src/
 describe("stellar-address utils", () => {
   describe("isValidStellarPublicKey", () => {
     it("accepts valid Stellar public key starting with G", () => {
-      const validKey = "GBBD47UZQ5PQQ4DFFH7D6XWVV37G5FFQVLNGIS2HFJ7FALL3UL5TWUC6";
+      const validKey = "GBIFOMSIIJZ5QAPYBLWUCMAIM4RWVCE7BTP25WHCZAZHSOHYO6XYBYMB";
       expect(isValidStellarPublicKey(validKey)).toBe(true);
     });
 
@@ -19,14 +19,14 @@ describe("stellar-address utils", () => {
     });
 
     it("rejects contract addresses (starting with C)", () => {
-      const contractAddress = "CBBD47UZQ5PQQ4DFFH7D6XWVV37G5FFQVLNGIS2HFJ7FALL3UL5TWUC6";
+      const contractAddress = "CAX62CGE4JWSCDDO6NFUTC2V7VWGX6VNWC6EIB2BPKFYI2YEO5TV5WUJ";
       expect(isValidStellarPublicKey(contractAddress)).toBe(false);
     });
   });
 
   describe("isValidSorobanContractId", () => {
     it("accepts valid Soroban contract ID starting with C", () => {
-      const validContractId = "CBBD47UZQ5PQQ4DFFH7D6XWVV37G5FFQVLNGIS2HFJ7FALL3UL5TWUC6";
+      const validContractId = "CAX62CGE4JWSCDDO6NFUTC2V7VWGX6VNWC6EIB2BPKFYI2YEO5TV5WUJ";
       expect(isValidSorobanContractId(validContractId)).toBe(true);
     });
 
@@ -42,13 +42,13 @@ describe("stellar-address utils", () => {
     });
 
     it("rejects Stellar public keys (starting with G)", () => {
-      const publicKey = "GBBD47UZQ5PQQ4DFFH7D6XWVV37G5FFQVLNGIS2HFJ7FALL3UL5TWUC6";
+      const publicKey = "GBIFOMSIIJZ5QAPYBLWUCMAIM4RWVCE7BTP25WHCZAZHSOHYO6XYBYMB";
       expect(isValidSorobanContractId(publicKey)).toBe(false);
     });
 
     it("rejects malformed contract addresses", () => {
       expect(isValidSorobanContractId("C" + "0".repeat(55))).toBe(false);
-      expect(isValidSorobanContractId("CBBD47UZQ5PQQ4DFFH7D6XWVV37G5FFQVLNGIS2HFJ7FALL3UL5TWUC")).toBe(
+      expect(isValidSorobanContractId("CAX62CGE4JWSCDDO6NFUTC2V7VWGX6VNWC6EIB2BPKFYI2YEO5TV5WU")).toBe(
         false
       );
     });

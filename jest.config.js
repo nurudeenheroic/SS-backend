@@ -6,8 +6,16 @@ module.exports = {
   roots: ["<rootDir>/tests"],
   testMatch: ["**/*.test.ts", "**/*.spec.ts"],
   moduleFileExtensions: ["ts", "js", "json"],
-  collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts"],
+  collectCoverageFrom: ["src/**/*.ts", "!src/types/**/*.ts", "!src/migrations/**/*.ts"],
   coverageDirectory: "coverage",
+  coverageThreshold: {
+    global: {
+      branches: 60,
+      functions: 80,
+      lines: 80,
+      statements: 80,
+    },
+  },
   verbose: true,
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1", // map @/ paths to src
