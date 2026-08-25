@@ -5,6 +5,7 @@ import express, { Request } from "express";
 import { createErrorMiddleware, notFoundMiddleware } from "./middleware/error.middleware";
 import { applyRateLimiters } from "./middleware/rate-limit.middleware";
 import { createRequestObservabilityMiddleware } from "./middleware/request-observability.middleware";
+import { sanitizeInputMiddleware } from "./middleware/sanitize-input.middleware";
 
 import { logger, type AppLogger } from "./observability/logger";
 import { getMetricsContentType, MetricsRegistry } from "./observability/metrics";
@@ -107,6 +108,8 @@ export function createApp({
   );
 
   app.use(express.json());
+
+  app.use(sanitizeInputMiddleware);
 
   // FORCE RATE LIMITER (tests depend on it)
   if (http?.rateLimit?.enabled !== false) {
