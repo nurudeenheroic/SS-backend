@@ -193,7 +193,7 @@ export function createApp({
     app.use("/api/v1/marketplace", createMarketplaceRouter({ marketplaceService }));
   }
 
-  if (config?.admin.ipWhitelist.length) {
+  if (config?.admin?.ipWhitelist?.length) {
     app.use("/api/v1/admin", createAdminRouter({ dataSource, allowedCidrs: config.admin.ipWhitelist }));
   }
 

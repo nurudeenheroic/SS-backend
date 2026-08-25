@@ -5,7 +5,7 @@ import type { AppLogger } from "../../../../src/observability/logger";
 describe("InvoiceEscrowContractService", () => {
   const ESCROW_CONTRACT_ID = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM";
   const TEST_SELLER = "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
-  const TEST_TOKEN = "CBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
+  const TEST_TOKEN = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
   const TEST_INVOICE_ID = "INV-2026-001";
   const TEST_AMOUNT_STROOPS = 500_000_000n;
   const TEST_DUE_DATE = 1770000000;
@@ -142,6 +142,96 @@ describe("InvoiceEscrowContractService", () => {
         sellerAddress: TEST_SELLER,
         amountStroops: "1000000",
       });
+    });
+  });
+
+  describe("buildFundEscrowTx", () => {
+    it("should construct valid fund_escrow host function invocation", () => {
+      const op = service.buildFundEscrowTx(TEST_INVOICE_ID, TEST_SELLER, TEST_AMOUNT_STROOPS);
+      expect(op.body().switch().name).toBe("invokeHostFunction");
+      const invokeContractArgs = op
+        .body()
+        .invokeHostFunctionOp()
+        .hostFunction()
+        .invokeContract();
+
+      expect(invokeContractArgs.functionName().toString()).toBe("fund_escrow");
+      const args = invokeContractArgs.args();
+      expect(args).toHaveLength(3);
+      expect(scValToNative(args[0])).toBe(TEST_INVOICE_ID);
+      expect(Address.fromScVal(args[1]).toString()).toBe(TEST_SELLER);
+      expect(BigInt(scValToNative(args[2]))).toBe(TEST_AMOUNT_STROOPS);
+    });
+  });
+
+  describe("buildRecordPaymentTx", () => {
+    it("should construct valid record_payment host function invocation", () => {
+      const op = service.buildRecordPaymentTx(TEST_INVOICE_ID, TEST_SELLER, TEST_AMOUNT_STROOPS);
+      const invokeContractArgs = op
+        .body()
+        .invokeHostFunctionOp()
+        .hostFunction()
+        .invokeContract();
+
+      expect(invokeContractArgs.functionName().toString()).toBe("record_payment");
+      const args = invokeContractArgs.args();
+      expect(args).toHaveLength(3);
+      expect(scValToNative(args[0])).toBe(TEST_INVOICE_ID);
+    });
+  });
+
+  describe("buildSettleEscrowTx", () => {
+    it("should construct valid settle_escrow host function invocation", () => {
+      const op = service.buildSettleEscrowTx(TEST_INVOICE_ID);
+      const invokeContractArgs = op
+        .body()
+        .invokeHostFunctionOp()
+        .hostFunction()
+        .invokeContract();
+
+      expect(invokeContractArgs.functionName().toString()).toBe("settle_escrow");
+      const args = invokeContractArgs.args();
+      expect(args).toHaveLength(1);
+      expect(scValToNative(args[0])).toBe(TEST_INVOICE_ID);
+    });
+  });
+
+  describe("RPC simulation and submission", () => {
+    it("should simulate transaction via RPC server", async () => {
+      const mockServer = {
+        simulateTransaction: jest.fn().mockResolvedValue({
+          minResourceFee: "100",
+          cost: { cpuInsns: "1000", memBytes: "2000" },
+          results: [{ xdr: "AAAA==" }],
+        }),
+      } as any;
+
+      const rpcService = new InvoiceEscrowContractService({
+        contractId: ESCROW_CONTRACT_ID,
+        server: mockServer,
+      });
+
+      const res = await rpcService.simulateTransaction({} as any);
+      expect(res.minResourceFee).toBe("100");
+      expect(mockServer.simulateTransaction).toHaveBeenCalled();
+    });
+
+    it("should submit transaction via RPC server", async () => {
+      const mockServer = {
+        sendTransaction: jest.fn().mockResolvedValue({
+          status: "PENDING",
+          hash: "abc123hash",
+        }),
+      } as any;
+
+      const rpcService = new InvoiceEscrowContractService({
+        contractId: ESCROW_CONTRACT_ID,
+        server: mockServer,
+      });
+
+      const res = await rpcService.submitTransaction({} as any);
+      expect(res.status).toBe("PENDING");
+      expect(res.txHash).toBe("abc123hash");
     });
   });
 });

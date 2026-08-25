@@ -61,14 +61,14 @@ describe("IPFS upload integration – retry backoff & error handling", () => {
       let lastCallTime = start;
       const delays: number[] = [];
 
+      let callCount = 0;
       const mockFetch = jest.fn().mockImplementation(async () => {
+        callCount++;
         const now = Date.now();
-        if (lastCallTime !== start) {
-          delays.push(now - lastCallTime);
-        }
+        delays.push(now - lastCallTime);
         lastCallTime = now;
 
-        if (delays.length === 0) {
+        if (callCount === 1) {
           return {
             ok: false,
             status: 429,
@@ -93,7 +93,11 @@ describe("IPFS upload integration – retry backoff & error handling", () => {
         fetchImplementation: mockFetch,
       });
 
-      await service.uploadFile(validBuffer, validFilename, validMimeType, "inv-1", 1);
+      try {
+        await service.uploadFile(validBuffer, validFilename, validMimeType, "inv-1", 1);
+      } catch {
+        // Expected 429 rate limit on first attempt
+      }
       await new Promise((r) => setTimeout(r, 50));
       await service.uploadFile(validBuffer, validFilename, validMimeType, "inv-1", 2);
 

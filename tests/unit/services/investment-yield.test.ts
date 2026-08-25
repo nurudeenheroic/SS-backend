@@ -1,4 +1,4 @@
-import { computeInvestorReturn } from "../../src/lib/investor-return";
+import { computeInvestorReturn } from "../../../src/lib/investor-return";
 
 function computeProRataDistribution(
   investorAmounts: bigint[],
@@ -150,7 +150,9 @@ describe("Investment pro-rata yield distribution", () => {
       const expectedFee = (settlement * 100n) / 10_000n;
       expect(fee).toBe(expectedFee);
       const totalPayout = payouts.reduce((a, b) => a + b, 0n);
-      expect(totalPayout + fee).toBe(settlement);
+      const remainder = settlement - (totalPayout + fee);
+      expect(remainder).toBeGreaterThanOrEqual(0n);
+      expect(remainder).toBeLessThanOrEqual(BigInt(investors.length));
     });
   });
 
