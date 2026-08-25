@@ -31,6 +31,30 @@ export interface InvestorDashboard {
   failedCount: number;
 }
 
+export interface MonthlyYieldMetric {
+  month: string;
+  investedAmount: string;
+  returnedAmount: string;
+  profit: string;
+  averageYieldPercent: string;
+}
+
+export interface InvestorAnalytics {
+  totalDeployedCapital: string;
+  totalProfitEarned: string;
+  pendingPayouts: string;
+  projectedTotalReturn: string;
+  weightedAverageApy: string;
+  statusDistribution: {
+    pending: number;
+    confirmed: number;
+    settled: number;
+    cancelled: number;
+    overdue: number;
+  };
+  monthlyPerformance: MonthlyYieldMetric[];
+}
+
 const ACTIVE_INVESTMENT_STATUSES = [InvestmentStatus.PENDING, InvestmentStatus.CONFIRMED];
 const SETTLED_INVESTMENT_STATUSES = [InvestmentStatus.SETTLED];
 const FAILED_INVESTMENT_STATUSES = [InvestmentStatus.CANCELLED];
@@ -89,6 +113,162 @@ export class InvestmentService {
      settledCount,
      settledReturns: totalReturns.toFixed(4),
      failedCount,
+    };
+  }
+
+  /**
+   * Calculates comprehensive investor portfolio performance analytics including:
+   * - Weighted average APY across all active investments
+   * - Deployed capital, total profit earned, pending payouts, projected return
+   * - Status distribution breakdown (including overdue detection)
+   * - Monthly historical yield & return metrics
+   */
+  async calculateInvestorAnalytics(investorId: string): Promise<InvestorAnalytics> {
+    const investments = await this.dataSource.getRepository(Investment).find({
+      where: { investorId },
+      relations: ["invoice"],
+      order: { createdAt: "ASC" },
+    });
+
+    let totalDeployedCapital = new Decimal(0);
+    let totalProfitEarned = new Decimal(0);
+    let pendingPayouts = new Decimal(0);
+    let weightedYieldSum = new Decimal(0);
+
+    const statusDistribution = {
+      pending: 0,
+      confirmed: 0,
+      settled: 0,
+      cancelled: 0,
+      overdue: 0,
+    };
+
+    const monthlyMap = new Map<
+      string,
+      { invested: Decimal; returned: Decimal; profit: Decimal; yieldSum: Decimal; count: number }
+    >();
+
+    const now = new Date();
+
+    for (const investment of investments) {
+      const amount = new Decimal(investment.investmentAmount || 0);
+      const expectedReturn = new Decimal(investment.expectedReturn || 0);
+      const invoice = investment.invoice;
+
+      // Status distribution
+      if (investment.status === InvestmentStatus.PENDING) {
+        statusDistribution.pending += 1;
+      } else if (investment.status === InvestmentStatus.CONFIRMED) {
+        statusDistribution.confirmed += 1;
+      } else if (investment.status === InvestmentStatus.SETTLED) {
+        statusDistribution.settled += 1;
+      } else if (investment.status === InvestmentStatus.CANCELLED) {
+        statusDistribution.cancelled += 1;
+      }
+
+      // Check if overdue
+      if (
+        (investment.status === InvestmentStatus.PENDING ||
+          investment.status === InvestmentStatus.CONFIRMED) &&
+        invoice?.dueDate &&
+        new Date(invoice.dueDate) < now
+      ) {
+        statusDistribution.overdue += 1;
+      }
+
+      // Active investments analytics
+      if (ACTIVE_INVESTMENT_STATUSES.includes(investment.status)) {
+        totalDeployedCapital = totalDeployedCapital.plus(amount);
+        pendingPayouts = pendingPayouts.plus(expectedReturn);
+
+        // APY / Yield rate calculation
+        let yieldRate = new Decimal(0);
+        if (invoice?.discountRate) {
+          yieldRate = new Decimal(invoice.discountRate);
+        } else if (amount.gt(0) && expectedReturn.gte(amount)) {
+          yieldRate = expectedReturn.minus(amount).dividedBy(amount).times(100);
+        }
+        weightedYieldSum = weightedYieldSum.plus(amount.times(yieldRate));
+      }
+
+      // Settled returns
+      if (SETTLED_INVESTMENT_STATUSES.includes(investment.status)) {
+        const actualReturn = investment.actualReturn !== null && investment.actualReturn !== undefined
+          ? new Decimal(investment.actualReturn)
+          : expectedReturn;
+        const profit = actualReturn.minus(amount);
+        if (profit.gt(0)) {
+          totalProfitEarned = totalProfitEarned.plus(profit);
+        }
+      }
+
+      // Monthly aggregation
+      const createdDate = investment.createdAt ? new Date(investment.createdAt) : new Date();
+      const year = createdDate.getUTCFullYear();
+      const month = String(createdDate.getUTCMonth() + 1).padStart(2, "0");
+      const monthKey = `${year}-${month}`;
+
+      let monthEntry = monthlyMap.get(monthKey);
+      if (!monthEntry) {
+        monthEntry = {
+          invested: new Decimal(0),
+          returned: new Decimal(0),
+          profit: new Decimal(0),
+          yieldSum: new Decimal(0),
+          count: 0,
+        };
+        monthlyMap.set(monthKey, monthEntry);
+      }
+
+      monthEntry.invested = monthEntry.invested.plus(amount);
+      if (investment.status === InvestmentStatus.SETTLED) {
+        const actualReturn = investment.actualReturn !== null && investment.actualReturn !== undefined
+          ? new Decimal(investment.actualReturn)
+          : expectedReturn;
+        monthEntry.returned = monthEntry.returned.plus(actualReturn);
+        const profit = actualReturn.minus(amount);
+        if (profit.gt(0)) {
+          monthEntry.profit = monthEntry.profit.plus(profit);
+        }
+      }
+
+      let invYield = new Decimal(0);
+      if (invoice?.discountRate) {
+        invYield = new Decimal(invoice.discountRate);
+      } else if (amount.gt(0) && expectedReturn.gte(amount)) {
+        invYield = expectedReturn.minus(amount).dividedBy(amount).times(100);
+      }
+      monthEntry.yieldSum = monthEntry.yieldSum.plus(invYield);
+      monthEntry.count += 1;
+    }
+
+    const weightedAverageApy = totalDeployedCapital.gt(0)
+      ? weightedYieldSum.dividedBy(totalDeployedCapital).toFixed(2)
+      : "0.00";
+
+    const projectedTotalReturn = pendingPayouts.gt(0)
+      ? pendingPayouts
+      : totalDeployedCapital;
+
+    const monthlyPerformance: MonthlyYieldMetric[] = Array.from(monthlyMap.entries()).map(
+      ([month, data]) => ({
+        month,
+        investedAmount: data.invested.toFixed(4),
+        returnedAmount: data.returned.toFixed(4),
+        profit: data.profit.toFixed(4),
+        averageYieldPercent:
+          data.count > 0 ? data.yieldSum.dividedBy(data.count).toFixed(2) : "0.00",
+      }),
+    );
+
+    return {
+      totalDeployedCapital: totalDeployedCapital.toFixed(4),
+      totalProfitEarned: totalProfitEarned.toFixed(4),
+      pendingPayouts: pendingPayouts.toFixed(4),
+      projectedTotalReturn: projectedTotalReturn.toFixed(4),
+      weightedAverageApy,
+      statusDistribution,
+      monthlyPerformance,
     };
   }
 
