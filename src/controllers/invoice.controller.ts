@@ -4,6 +4,7 @@ import { HttpError } from "../utils/http-error";
 import { ServiceError } from "../utils/service-error";
 import { AuthenticatedRequest } from "../types/auth";
 import { InvoiceStatus } from "@/types/enums";
+import { calculateInvoiceTerms } from "../utils/discount-calculator.utils";
 
 export interface UploadDocumentRequest extends Request {
   params: {
@@ -382,6 +383,31 @@ export function createInvoiceController(invoiceService: InvoiceService) {
         }
 
         next(error);
+      }
+    },
+
+    async calculateTerms(
+      req: Request,
+      res: Response,
+      next: NextFunction,
+    ): Promise<void> {
+      try {
+        const { faceValue, dueDate, discountBps, platformFeeBps, referenceDate } = req.body;
+
+        const terms = calculateInvoiceTerms({
+          faceValue,
+          dueDate,
+          discountBps: Number(discountBps),
+          platformFeeBps: platformFeeBps !== undefined ? Number(platformFeeBps) : 0,
+          referenceDate,
+        });
+
+        res.status(200).json({
+          success: true,
+          data: terms,
+        });
+      } catch (error: any) {
+        next(new HttpError(400, error.message || "Failed to calculate invoice terms"));
       }
     },
   };

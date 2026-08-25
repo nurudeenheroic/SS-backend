@@ -74,6 +74,20 @@ const getInvoicesQuerySchema = Joi.object({
   status: Joi.string().optional(),
 });
 
+const calculateTermsSchema = Joi.object({
+  faceValue: Joi.alternatives()
+    .try(
+      Joi.string().pattern(/^\d+(\.\d{1,4})?$/),
+      Joi.number().positive(),
+    )
+    .required()
+    .messages({ "alternatives.match": "faceValue must be a positive number or decimal string with max 4 decimal places" }),
+  dueDate: Joi.date().iso().required(),
+  discountBps: Joi.number().integer().min(0).max(10000).required(),
+  platformFeeBps: Joi.number().integer().min(0).max(10000).optional().default(0),
+  referenceDate: Joi.date().iso().optional(),
+});
+
 /**
  * Validation middleware factory
  */
@@ -226,6 +240,13 @@ export function createInvoiceRouter({
     "/:id/escrow",
     authenticateJWT,
     controller.getInvoiceEscrowStatus,
+  );
+
+  // POST /api/v1/invoices/calculate-terms - Calculate invoice discounting terms, fees, and APR
+  router.post(
+    "/calculate-terms",
+    validateBody(calculateTermsSchema),
+    controller.calculateTerms,
   );
 
   return router;
