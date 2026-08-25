@@ -24,7 +24,7 @@ export async function bootstrap(): Promise<{ server: Server }> {
   const authService = createAuthService(dataSource, config, logger);
   const notificationService = createNotificationService(dataSource);
   const ipfsService = createIPFSService(config.ipfs, logger);
-  const invoiceService = createInvoiceService(dataSource, ipfsService);
+  const invoiceService = createInvoiceService(dataSource, ipfsService, notificationService);
   const investmentService = createInvestmentService(dataSource);
   const settlementService = createSettlementService(dataSource);
   const marketplaceService = createMarketplaceService(dataSource);

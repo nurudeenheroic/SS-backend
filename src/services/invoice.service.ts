@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { Invoice } from "../models/Invoice.model";
 import { Investment } from "../models/Investment.model";
 import { User } from "../models/User.model";
-import { InvoiceStatus, KYCStatus, InvestmentStatus } from "../types/enums";
+import { InvoiceStatus, KYCStatus, InvestmentStatus, NotificationType } from "../types/enums";
 import { ServiceError } from "../utils/service-error";
 import { validateInvoiceForPublish } from "../lib/validate-invoice-for-publish";
 import { logInvoiceTransition } from "../lib/invoice-lifecycle-log";
@@ -24,10 +24,29 @@ export interface InvoiceRepositoryContract {
   create(data: Partial<Invoice>): Invoice;
 }
 
+/**
+ * Minimal contract for notifying a user, satisfied by
+ * `NotificationService.createNotification` (see notification.service.ts).
+ * Kept as a narrow structural type here (rather than importing
+ * `NotificationService` directly) to avoid coupling `InvoiceService` to the
+ * notification module's full surface area.
+ */
+export interface NotificationSink {
+  createNotification(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    message: string,
+  ): Promise<unknown>;
+}
+
 export interface InvoiceServiceDependencies {
   invoiceRepository: InvoiceRepositoryContract;
   ipfsService: IPFSService;
   dataSource?: DataSource;
+  /** Optional: enables `rejectInvoice` to notify the seller. If omitted,
+   *  rejection still persists the status/reason but skips notifying. */
+  notificationSink?: NotificationSink;
 }
 
 export interface UploadDocumentInput {
@@ -71,6 +90,11 @@ export interface PublishInvoiceInput {
   sellerId: string;
 }
 
+export interface RejectInvoiceInput {
+  invoiceId: string;
+  rejectionReason: string;
+}
+
 export interface CommitmentDTO {
   investor_wallet: string;
   amount: string;
@@ -90,6 +114,7 @@ export interface InvoiceDTO {
   ipfsHash: string | null;
   riskScore: string | null;
   smartContractId: string | null;
+  rejectionReason: string | null;
   createdAt: Date;
   updatedAt: Date;
   commitments?: CommitmentDTO[];
@@ -107,22 +132,25 @@ export interface GetInvoicesOptions {
  */
 const VALID_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
   [InvoiceStatus.DRAFT]: [InvoiceStatus.PENDING, InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED],
-  [InvoiceStatus.PENDING]: [InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED],
+  [InvoiceStatus.PENDING]: [InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED, InvoiceStatus.REJECTED],
   [InvoiceStatus.PUBLISHED]: [InvoiceStatus.FUNDED, InvoiceStatus.CANCELLED],
   [InvoiceStatus.FUNDED]: [InvoiceStatus.SETTLED, InvoiceStatus.CANCELLED],
   [InvoiceStatus.SETTLED]: [],
   [InvoiceStatus.CANCELLED]: [],
+  [InvoiceStatus.REJECTED]: [],
 };
 
 export class InvoiceService {
   private readonly invoiceRepository: InvoiceRepositoryContract;
   private readonly ipfsService: IPFSService;
   private readonly dataSource?: DataSource;
+  private readonly notificationSink?: NotificationSink;
 
   constructor(dependencies: InvoiceServiceDependencies) {
     this.invoiceRepository = dependencies.invoiceRepository;
     this.ipfsService = dependencies.ipfsService;
     this.dataSource = dependencies.dataSource;
+    this.notificationSink = dependencies.notificationSink;
   }
 
   /**
@@ -386,6 +414,66 @@ export class InvoiceService {
   }
 
   /**
+   * Admin-only: reject an invoice pending review, persisting the rejection
+   * reason and notifying the seller. Only invoices whose current status
+   * allows a transition to REJECTED (currently just PENDING — see
+   * VALID_TRANSITIONS) can be rejected; rejecting an invoice that is
+   * already REJECTED (or any other non-transitionable status) returns a
+   * 409 `invoice_already_rejected` / `invalid_status_transition` error so
+   * callers get a deterministic conflict response instead of silently
+   * overwriting a prior decision.
+   */
+  async rejectInvoice(input: RejectInvoiceInput): Promise<InvoiceDTO> {
+    const invoice = await this.invoiceRepository.findOne({
+      where: { id: input.invoiceId },
+    });
+
+    if (!invoice) {
+      throw new ServiceError("invoice_not_found", "Invoice not found", 404);
+    }
+
+    if (invoice.status === InvoiceStatus.REJECTED) {
+      throw new ServiceError(
+        "invoice_already_rejected",
+        "This invoice has already been rejected",
+        409,
+      );
+    }
+
+    if (!this.isValidTransition(invoice.status, InvoiceStatus.REJECTED)) {
+      throw new ServiceError(
+        "invalid_status_transition",
+        `Cannot transition from ${invoice.status} to ${InvoiceStatus.REJECTED}`,
+        409,
+      );
+    }
+
+    const previousStatus = invoice.status;
+    invoice.status = InvoiceStatus.REJECTED;
+    invoice.rejectionReason = input.rejectionReason;
+    const updated = await this.invoiceRepository.save(invoice);
+
+    logInvoiceTransition(logger, {
+      invoiceId: updated.id,
+      fromState: previousStatus,
+      toState: InvoiceStatus.REJECTED,
+      actorWallet: "admin",
+      reason: "admin_rejected",
+    });
+
+    if (this.notificationSink) {
+      await this.notificationSink.createNotification(
+        updated.sellerId,
+        NotificationType.INVOICE,
+        "Invoice rejected",
+        `Your invoice ${updated.invoiceNumber} was rejected: ${input.rejectionReason}`,
+      );
+    }
+
+    return this.toDTO(updated);
+  }
+
+  /**
    * Upload document (IPFS)
    */
   async uploadDocument(input: UploadDocumentInput): Promise<UploadDocumentResult> {
@@ -547,6 +635,7 @@ export class InvoiceService {
       ipfsHash: invoice.ipfsHash,
       riskScore: invoice.riskScore,
       smartContractId: invoice.smartContractId,
+      rejectionReason: invoice.rejectionReason ?? null,
       createdAt: invoice.createdAt,
       updatedAt: invoice.updatedAt,
     };
@@ -555,7 +644,8 @@ export class InvoiceService {
 
 export function createInvoiceService(
   dataSource: DataSource,
-  ipfsService: IPFSService
+  ipfsService: IPFSService,
+  notificationSink?: NotificationSink
 ): InvoiceService {
   const invoiceRepository = dataSource.getRepository(Invoice);
 
@@ -563,5 +653,6 @@ export function createInvoiceService(
     invoiceRepository,
     ipfsService,
     dataSource,
+    notificationSink,
   });
 }
