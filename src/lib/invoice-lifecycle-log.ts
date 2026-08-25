@@ -2,7 +2,11 @@ import type { AppLogger } from "../observability/logger";
 import { truncateWalletAddress } from "./kyc";
 import type { InvoiceStatus } from "../types/enums";
 
-export type InvoiceTransitionReason = "seller_published" | "fully_funded" | "admin_settled";
+export type InvoiceTransitionReason =
+  | "seller_published"
+  | "fully_funded"
+  | "admin_settled"
+  | "admin_rejected";
 
 export interface InvoiceTransitionLogInput {
   invoiceId: string;

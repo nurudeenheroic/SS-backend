@@ -194,7 +194,10 @@ export function createApp({
   }
 
   if (config?.admin?.ipWhitelist?.length) {
-    app.use("/api/v1/admin", createAdminRouter({ dataSource, allowedCidrs: config.admin.ipWhitelist }));
+    app.use(
+      "/api/v1/admin",
+      createAdminRouter({ dataSource, allowedCidrs: config.admin.ipWhitelist, invoiceService }),
+    );
   }
 
   app.use(notFoundMiddleware);
