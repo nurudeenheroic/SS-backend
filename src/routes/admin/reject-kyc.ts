@@ -26,7 +26,7 @@ export async function rejectKYC(req: Request<unknown, unknown, RejectKYCBody>, r
       return res.status(404).json({ error: "User not found" });
     }
 
-    await userRepo.update(userId, { kycStatus: KYCStatus.REJECTED });
+    await userRepo.update(userId, { kycStatus: KYCStatus.REJECTED, isKycVerified: false });
 
     // Logged only after the DB update succeeds, so the audit trail never
     // records a decision that didn't actually persist.

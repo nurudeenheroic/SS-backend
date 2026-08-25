@@ -59,6 +59,7 @@ export interface AppConfig {
   };
   kyc: {
     skipVerification: boolean;
+    webhookSecret?: string;
   };
   admin: {
     ipWhitelist: string[];
@@ -289,6 +290,7 @@ export function getConfig(): AppConfig {
         process.env.NODE_ENV !== "production",
         "SKIP_KYC_VERIFICATION"
       ),
+      webhookSecret: process.env.KYC_WEBHOOK_SECRET ?? "",
     },
 
     admin: {

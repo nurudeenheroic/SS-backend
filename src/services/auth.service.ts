@@ -417,6 +417,7 @@ export function toPublicUser(user: User): PublicUser {
     email: user.email,
     userType: user.userType,
     kycStatus: user.kycStatus,
+    isKycVerified: user.isKycVerified,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
