@@ -17,6 +17,7 @@ import { createInvestmentRouter } from "./routes/investment.routes";
 import { createSettlementRouter } from "./routes/settlement.routes";
 import { createMarketplaceRouter } from "./routes/marketplace.routes";
 import { createAdminRouter } from "./routes/admin/admin.routes";
+import { createContractGuardService } from "./services/stellar/contract-guard.service";
 
 import type { AuthService } from "./services/auth.service";
 import type { NotificationService } from "./services/notification.service";
@@ -181,12 +182,37 @@ export function createApp({
     app.use("/api/v1/invoices", createInvoiceRouter({ invoiceService, config }));
   }
 
+  // The emergency pause guard only has something to check when a Soroban
+  // contract and an RPC endpoint are both configured; otherwise the routers
+  // mount without it and behave exactly as before.
+  const pauseGuardContractId = config?.sorobanEscrow.contractId ?? null;
+  const pauseGuardRpcUrl = config?.sorobanEscrow.rpcUrl ?? null;
+  const contractGuardService =
+    pauseGuardRpcUrl && pauseGuardContractId
+      ? createContractGuardService({ rpcUrl: pauseGuardRpcUrl })
+      : undefined;
+
   if (investmentService) {
-    app.use("/api/v1/investments", createInvestmentRouter({ investmentService, authService }));
+    app.use(
+      "/api/v1/investments",
+      createInvestmentRouter({
+        investmentService,
+        authService,
+        contractGuardService,
+        contractId: pauseGuardContractId,
+      }),
+    );
   }
 
   if (settlementService) {
-    app.use("/api/v1/settlements", createSettlementRouter({ settlementService }));
+    app.use(
+      "/api/v1/settlements",
+      createSettlementRouter({
+        settlementService,
+        contractGuardService,
+        contractId: pauseGuardContractId,
+      }),
+    );
   }
 
   if (marketplaceService) {

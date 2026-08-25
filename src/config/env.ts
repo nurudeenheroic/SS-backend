@@ -46,6 +46,8 @@ export interface AppConfig {
     enabled: boolean;
     contractId: string | null;
     fundingMode: "wallet_xdr";
+    /** Soroban JSON-RPC endpoint used to read on-chain contract state. */
+    rpcUrl: string | null;
   };
   ipfs: {
     apiUrl: string;
@@ -255,6 +257,7 @@ export function getConfig(): AppConfig {
       enabled: parseBoolean(process.env.SOROBAN_ESCROW_ENABLED, false, "SOROBAN_ESCROW_ENABLED"),
       contractId: process.env.SOROBAN_ESCROW_CONTRACT_ID ?? null,
       fundingMode: "wallet_xdr",
+      rpcUrl: process.env.SOROBAN_RPC_URL ?? null,
     },
 
     ipfs: {

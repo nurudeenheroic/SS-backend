@@ -4,6 +4,7 @@ import { DataSource } from "typeorm";
 import { ipWhitelistMiddleware } from "@/middleware/ip-whitelist.middleware";
 import { approveKYC } from "./approve-kyc";
 import { rejectKYC } from "./reject-kyc";
+import { revokeKYC } from "./revoke-kyc";
 
 export interface AdminRouterDependencies {
   dataSource: DataSource;
@@ -25,6 +26,10 @@ export function createAdminRouter({
 
   router.post("/reject-kyc", (req, res) => {
     rejectKYC(req, res, dataSource);
+  });
+
+  router.post("/revoke-kyc", (req, res) => {
+    revokeKYC(req, res, dataSource);
   });
 
   return router;

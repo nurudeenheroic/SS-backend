@@ -71,6 +71,27 @@ export interface PublishInvoiceInput {
   sellerId: string;
 }
 
+export interface BatchPublishInvoicesInput {
+  invoiceIds: string[];
+  sellerId: string;
+}
+
+/** Why a single invoice in a batch could not be published. */
+export interface BatchPublishRejection {
+  invoiceId: string;
+  code:
+    | "invoice_not_found"
+    | "unauthorized_invoice_access"
+    | "invalid_status_transition"
+    | "invoice_not_publishable";
+  message: string;
+}
+
+export interface BatchPublishInvoicesResult {
+  published: InvoiceDTO[];
+  count: number;
+}
+
 export interface CommitmentDTO {
   investor_wallet: string;
   amount: string;
@@ -383,6 +404,138 @@ export class InvoiceService {
     });
 
     return this.toDTO(updated);
+  }
+
+  /**
+   * Publish several draft invoices in one atomic step.
+   *
+   * Sellers with large receivable books were publishing twenty invoices with
+   * twenty round trips, and a failure halfway through left them with a
+   * half-published book and no clear way to tell which half. This is all or
+   * nothing: every invoice is validated first, and if any one of them fails
+   * the whole batch is rejected and nothing is written.
+   *
+   * The rejection list names every invoice that failed and why, so the seller
+   * can fix all of them in one pass rather than rediscovering the next problem
+   * on each retry.
+   */
+  async publishInvoicesBatch(
+    input: BatchPublishInvoicesInput,
+  ): Promise<BatchPublishInvoicesResult> {
+    const { invoiceIds, sellerId } = input;
+
+    if (invoiceIds.length === 0) {
+      throw new ServiceError("empty_batch", "At least one invoice id is required", 400);
+    }
+
+    const uniqueIds = [...new Set(invoiceIds)];
+
+    if (!this.dataSource) {
+      throw new ServiceError(
+        "batch_publish_unavailable",
+        "Batch publishing requires a database connection",
+        503,
+      );
+    }
+
+    // The seller's wallet is captured alongside each invoice because the
+    // lifecycle log needs it after the write, once the relation may no longer
+    // be loaded on the saved entity.
+    const publishable: Array<{ invoice: Invoice; sellerWallet: string }> = [];
+    const rejections: BatchPublishRejection[] = [];
+
+    for (const invoiceId of uniqueIds) {
+      const invoice = await this.invoiceRepository.findOne({
+        where: { id: invoiceId },
+        relations: ["seller"],
+      });
+
+      if (!invoice) {
+        rejections.push({
+          invoiceId,
+          code: "invoice_not_found",
+          message: "Invoice not found",
+        });
+        continue;
+      }
+
+      if (invoice.sellerId !== sellerId) {
+        // Reported the same way as a missing invoice would be, so the response
+        // does not confirm that someone else's invoice id exists.
+        rejections.push({
+          invoiceId,
+          code: "unauthorized_invoice_access",
+          message: "Invoice not found",
+        });
+        continue;
+      }
+
+      const seller = invoice.seller as unknown as User;
+      if (!seller || seller.kycStatus !== KYCStatus.APPROVED) {
+        throw new ServiceError(
+          "kyc_approval_required",
+          "KYC approval is required to publish invoices",
+          403,
+        );
+      }
+
+      if (invoice.status !== InvoiceStatus.DRAFT) {
+        rejections.push({
+          invoiceId,
+          code: "invalid_status_transition",
+          message: `Cannot publish an invoice in status ${invoice.status}; only drafts can be published`,
+        });
+        continue;
+      }
+
+      const validationErrors = validateInvoiceForPublish(invoice);
+      if (validationErrors.length > 0) {
+        rejections.push({
+          invoiceId,
+          code: "invoice_not_publishable",
+          message: `Invoice failed pre-publish validation: ${validationErrors.map((e) => e.message).join(" ")}`,
+        });
+        continue;
+      }
+
+      publishable.push({ invoice, sellerWallet: seller.stellarAddress });
+    }
+
+    if (rejections.length > 0) {
+      throw new ServiceError(
+        "batch_publish_rejected",
+        `${rejections.length} of ${uniqueIds.length} invoices cannot be published; no invoices were changed`,
+        400,
+        { rejections },
+      );
+    }
+
+    // Nothing is written until every invoice has passed, so a failure inside
+    // the transaction rolls the whole batch back rather than leaving a partial
+    // publish behind.
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const results: Invoice[] = [];
+      for (const { invoice } of publishable) {
+        invoice.status = InvoiceStatus.PUBLISHED;
+        results.push(await manager.save(invoice));
+      }
+      return results;
+    });
+
+    publishable.forEach(({ sellerWallet }, index) => {
+      logInvoiceTransition(logger, {
+        invoiceId: saved[index].id,
+        fromState: InvoiceStatus.DRAFT,
+        toState: InvoiceStatus.PUBLISHED,
+        actorWallet: sellerWallet,
+        reason: "seller_batch_published",
+      });
+    });
+
+    return {
+      published: saved.map((invoice) => this.toDTO(invoice)),
+      count: saved.length,
+    };
   }
 
   /**
