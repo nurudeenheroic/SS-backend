@@ -30,5 +30,8 @@ export function createInvestmentRouter({
   // GET /api/v1/investments/dashboard - Investor portfolio aggregate
   router.get("/dashboard", authMiddleware, controller.getDashboard);
 
+  // GET /api/v1/investments/analytics - Investor portfolio performance analytics
+  router.get("/analytics", authMiddleware, controller.getInvestorAnalytics);
+
   return router;
 }
