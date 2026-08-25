@@ -41,9 +41,12 @@ export interface ReconciliationTickResult {
   durationMs: number;
 }
 
-interface ReconcilePendingStellarStateWorkerDependencies {
+import type { EventIndexerService } from "../services/stellar/event-indexer.service";
+
+export interface ReconcilePendingStellarStateWorkerDependencies {
   repository: ReconciliationCandidateRepository;
   paymentVerifier: PaymentVerifier;
+  eventIndexer?: EventIndexerService;
   config: AppConfig["reconciliation"];
   logger: AppLogger;
   now?: () => Date;
@@ -65,6 +68,7 @@ const EMPTY_TICK_RESULT: ReconciliationTickResult = {
 export class ReconcilePendingStellarStateWorker {
   private readonly repository: ReconciliationCandidateRepository;
   private readonly paymentVerifier: PaymentVerifier;
+  private readonly eventIndexer?: EventIndexerService;
   private readonly config: AppConfig["reconciliation"];
   private readonly logger: AppLogger;
   private readonly now: () => Date;
@@ -77,6 +81,7 @@ export class ReconcilePendingStellarStateWorker {
   constructor(dependencies: ReconcilePendingStellarStateWorkerDependencies) {
     this.repository = dependencies.repository;
     this.paymentVerifier = dependencies.paymentVerifier;
+    this.eventIndexer = dependencies.eventIndexer;
     this.config = dependencies.config;
     this.logger = dependencies.logger.child({
       component: "stellar-reconciliation-worker",
@@ -180,6 +185,19 @@ export class ReconcilePendingStellarStateWorker {
         }
 
         await this.yieldControl();
+      }
+
+      if (this.eventIndexer) {
+        try {
+          const events = await this.eventIndexer.pollContractEvents();
+          if (events.length > 0) {
+            await this.eventIndexer.ingestEvents(events);
+          }
+        } catch (indexerErr) {
+          this.logger.warn("Failed to poll or ingest contract events during reconciliation tick", {
+            err: indexerErr,
+          });
+        }
       }
 
       result.durationMs = this.now().getTime() - startedAt.getTime();

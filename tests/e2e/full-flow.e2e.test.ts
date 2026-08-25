@@ -162,6 +162,9 @@ describe("E2E: Complete Invoice Financing Flow", () => {
       kyc: {
         skipVerification: true,
       },
+      admin: {
+        ipWhitelist: [],
+      },
     };
 
     // Initialize test database (SQLite in-memory)

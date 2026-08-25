@@ -38,12 +38,12 @@ describe("InvoiceTokenContractService - buildMintTx", () => {
     const hostFunction = invokeHostFunctionOp.hostFunction();
 
     expect(hostFunction.switch().name).toBe(
-      "hostFunctionTypeHostFunctionTypeInvokeContract",
+      "hostFunctionTypeInvokeContract",
     );
 
     const invokeContractArgs = hostFunction.invokeContract();
     const contractAddressScVal = invokeContractArgs.contractAddress();
-    const contractAddress = Address.fromScVal(contractAddressScVal).toString();
+    const contractAddress = Address.fromScAddress(contractAddressScVal).toString();
 
     expect(contractAddress).toBe(TOKEN_CONTRACT_ID);
   });
@@ -120,5 +120,53 @@ describe("InvoiceTokenContractService - buildMintTx", () => {
 
   it("should reject invalid recipient Stellar address strings", () => {
     expect(() => service.buildMintTx("INVALID_STELLAR_ADDRESS", 1000n)).toThrow();
+  });
+
+  describe("mintInvoiceTokens", () => {
+    it("should build and return structured mint result", async () => {
+      const result = await service.mintInvoiceTokens(
+        "INV-123",
+        TEST_RECIPIENT,
+        500_000n,
+      );
+
+      expect(result.invoiceId).toBe("INV-123");
+      expect(result.contractId).toBe(TOKEN_CONTRACT_ID);
+      expect(result.recipientAddress).toBe(TEST_RECIPIENT);
+      expect(result.tokenAmount).toBe("500000");
+      expect(result.operation).toBeDefined();
+    });
+  });
+
+  describe("buildBalanceTx & getTokenBalance", () => {
+    it("should construct valid balance host function invocation", () => {
+      const op = service.buildBalanceTx(TEST_RECIPIENT);
+      const invokeContractArgs = op
+        .body()
+        .invokeHostFunctionOp()
+        .hostFunction()
+        .invokeContract();
+
+      expect(invokeContractArgs.functionName().toString()).toBe("balance");
+      const args = invokeContractArgs.args();
+      expect(args).toHaveLength(1);
+      expect(Address.fromScVal(args[0]).toString()).toBe(TEST_RECIPIENT);
+    });
+
+    it("should simulate balance query with RPC server", async () => {
+      const mockServer = {
+        simulateTransaction: jest.fn().mockResolvedValue({
+          results: [{ xdr: nativeToScVal(12345n, { type: "i128" }).toXDR("base64") }],
+        }),
+      } as any;
+
+      const rpcTokenService = new InvoiceTokenContractService({
+        contractId: TOKEN_CONTRACT_ID,
+        server: mockServer,
+      });
+
+      const balance = await rpcTokenService.getTokenBalance(TEST_RECIPIENT);
+      expect(balance).toBe(12345n);
+    });
   });
 });

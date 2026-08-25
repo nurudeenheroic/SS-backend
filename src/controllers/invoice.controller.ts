@@ -406,8 +406,12 @@ export function createInvoiceController(invoiceService: InvoiceService) {
           success: true,
           data: terms,
         });
-      } catch (error: any) {
-        next(new HttpError(400, error.message || "Failed to calculate invoice terms"));
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to calculate invoice terms";
+        next(new HttpError(400, message));
       }
     },
   };
