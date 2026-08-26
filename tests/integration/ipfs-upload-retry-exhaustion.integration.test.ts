@@ -83,6 +83,7 @@ describe("IPFS upload retry exhaustion (issue #218)", () => {
       riskScore: null,
       status: InvoiceStatus.DRAFT,
       smartContractId: null,
+      rejectionReason: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,
