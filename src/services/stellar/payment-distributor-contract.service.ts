@@ -1,4 +1,4 @@
-import { Contract, Address, nativeToScVal, xdr, SorobanRpc } from "stellar-sdk";
+import { Contract, Address, nativeToScVal, xdr, SorobanRpc, Keypair, TransactionBuilder, BASE_FEE } from "stellar-sdk";
 import type { AppLogger } from "../../observability/logger";
 import { logger as globalLogger } from "../../observability/logger";
 
@@ -18,7 +18,20 @@ export interface PaymentDistributorContractServiceDependencies {
   platformSecretKey?: string;
   server?: SorobanRpc.Server;
   logger?: AppLogger;
+  verifyDistributorWiring?: () => Promise<boolean>;
+  confirmationPollMs?: number;
+  confirmationAttempts?: number;
 }
+
+export interface DistributePayoutsInput {
+  invoiceId: string;
+  recipients: PayoutRecipient[];
+  totalAmountStroops: bigint;
+  feeRecipient: string;
+  feeBps: number;
+}
+
+export interface DistributePayoutsResult { transactionHash: string; ledger: number | null; }
 
 const MAX_FEE_BPS = 10_000;
 
@@ -40,6 +53,9 @@ export class PaymentDistributorContractService {
   private readonly networkPassphrase?: string;
   private readonly platformSecretKey?: string;
   private readonly logger: AppLogger;
+  private readonly verifyDistributorWiring?: () => Promise<boolean>;
+  private readonly confirmationPollMs: number;
+  private readonly confirmationAttempts: number;
 
   constructor(
     dependenciesOrContractId: string | PaymentDistributorContractServiceDependencies,
@@ -52,6 +68,8 @@ export class PaymentDistributorContractService {
       this.contractId = dependenciesOrContractId;
       this.contract = new Contract(dependenciesOrContractId);
       this.logger = logger ?? globalLogger;
+      this.confirmationPollMs = 1000;
+      this.confirmationAttempts = 20;
     } else {
       if (!dependenciesOrContractId.contractId) {
         throw new Error("contractId is required.");
@@ -68,6 +86,9 @@ export class PaymentDistributorContractService {
         });
       }
       this.logger = dependenciesOrContractId.logger ?? logger ?? globalLogger;
+      this.verifyDistributorWiring = dependenciesOrContractId.verifyDistributorWiring;
+      this.confirmationPollMs = dependenciesOrContractId.confirmationPollMs ?? 1000;
+      this.confirmationAttempts = dependenciesOrContractId.confirmationAttempts ?? 20;
     }
   }
 
@@ -118,5 +139,41 @@ export class PaymentDistributorContractService {
       new Address(platformFeeAccount).toScVal(),
       nativeToScVal(feeBps, { type: "u32" }),
     );
+  }
+
+  public async distributePayouts(input: DistributePayoutsInput): Promise<DistributePayoutsResult> {
+    if (!this.rpcServer || !this.networkPassphrase || !this.platformSecretKey) {
+      throw new Error("Payment distributor RPC and signer configuration is incomplete.");
+    }
+    if (this.verifyDistributorWiring && !(await this.verifyDistributorWiring())) {
+      throw new Error("Payment distributor is not initialized on the invoice escrow contract.");
+    }
+    const recipientTotal = input.recipients.reduce((sum, recipient) => sum + BigInt(recipient.amountStroops), 0n);
+    const fee = (input.totalAmountStroops * BigInt(input.feeBps)) / 10_000n;
+    if (recipientTotal + fee > input.totalAmountStroops) {
+      throw new Error("Payout recipients and protocol fee exceed the settlement total.");
+    }
+
+    const signer = Keypair.fromSecret(this.platformSecretKey);
+    const account = await this.rpcServer.getAccount(signer.publicKey());
+    const transaction = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    }).addOperation(this.buildDistributePayoutsTx(input.invoiceId, input.recipients, input.feeRecipient, input.feeBps)).setTimeout(30).build();
+    const prepared = await this.rpcServer.prepareTransaction(transaction);
+    prepared.sign(signer);
+    const submitted = await this.rpcServer.sendTransaction(prepared);
+    if (submitted.status === "ERROR") throw new Error("Payment distribution transaction was rejected by Soroban RPC.");
+
+    for (let attempt = 0; attempt < this.confirmationAttempts; attempt++) {
+      const result = await this.rpcServer.getTransaction(submitted.hash);
+      if (result.status === "SUCCESS") {
+        this.logger.info("Payment distribution confirmed on-chain.", { invoice_id: input.invoiceId, transaction_hash: submitted.hash });
+        return { transactionHash: submitted.hash, ledger: "ledger" in result ? Number(result.ledger) : null };
+      }
+      if (result.status === "FAILED") throw new Error("Payment distribution transaction reverted on-chain.");
+      await new Promise((resolve) => setTimeout(resolve, this.confirmationPollMs));
+    }
+    throw new Error("Timed out waiting for payment distribution confirmation.");
   }
 }

@@ -41,6 +41,8 @@ export interface SorobanConfig {
   tokenContractId?: string;
   paymentDistributorContractId?: string;
   platformSecretKey?: string;
+  platformFeeRecipient?: string;
+  platformFeeBps: number;
 }
 
 export function getSorobanConfig(): SorobanConfig {
@@ -69,6 +71,11 @@ export function getSorobanConfig(): SorobanConfig {
   const platformSecretKey =
     process.env.STELLAR_PLATFORM_SECRET_KEY ??
     process.env.PLATFORM_SECRET_KEY;
+  const platformFeeRecipient = process.env.PLATFORM_FEE_RECIPIENT;
+  const platformFeeBps = Number(process.env.PLATFORM_FEE_BPS ?? "0");
+  if (!Number.isInteger(platformFeeBps) || platformFeeBps < 0 || platformFeeBps > 10_000) {
+    throw new Error("PLATFORM_FEE_BPS must be an integer between 0 and 10000.");
+  }
 
   return {
     rpcUrl,
@@ -77,6 +84,8 @@ export function getSorobanConfig(): SorobanConfig {
     tokenContractId,
     paymentDistributorContractId,
     platformSecretKey,
+    platformFeeRecipient,
+    platformFeeBps,
   };
 }
 
