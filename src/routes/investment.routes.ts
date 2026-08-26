@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { InvestmentController } from "../controllers/investment.controller";
 import { InvestmentService } from "../services/investment.service";
-import { createAuthMiddleware } from "../middleware/auth.middleware";
+import { checkKycVerified, createAuthMiddleware } from "../middleware/auth.middleware";
 import { createWalletRateLimiter } from "../middleware/rate-limit-wallet.middleware";
 import type { AuthService } from "../services/auth.service";
 
@@ -25,7 +25,7 @@ export function createInvestmentRouter({
   const authMiddleware = createAuthMiddleware(authService);
 
   // POST /api/v1/investments - Create a new investment commitment
-  router.post("/", authMiddleware, investmentRateLimiter, controller.createInvestment);
+  router.post("/", authMiddleware, checkKycVerified, investmentRateLimiter, controller.createInvestment);
 
   // GET /api/v1/investments/dashboard - Investor portfolio aggregate
   router.get("/dashboard", authMiddleware, controller.getDashboard);
