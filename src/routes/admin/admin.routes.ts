@@ -5,7 +5,7 @@ import { ipWhitelistMiddleware } from "@/middleware/ip-whitelist.middleware";
 import type { InvoiceService } from "@/services/invoice.service";
 import { approveKYC } from "./approve-kyc";
 import { rejectKYC } from "./reject-kyc";
-import { rejectInvoice } from "./reject-invoice";
+import { revokeKYC } from "./revoke-kyc";
 
 export interface AdminRouterDependencies {
   dataSource: DataSource;
@@ -33,11 +33,9 @@ export function createAdminRouter({
     rejectKYC(req, res, dataSource);
   });
 
-  if (invoiceService) {
-    router.post("/invoices/:id/reject", (req, res) => {
-      rejectInvoice(req, res, invoiceService);
-    });
-  }
+  router.post("/revoke-kyc", (req, res) => {
+    revokeKYC(req, res, dataSource);
+  });
 
   return router;
 }

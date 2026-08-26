@@ -52,6 +52,12 @@ export interface PublishInvoiceRequest extends AuthenticatedRequest {
   };
 }
 
+export interface BatchPublishInvoicesRequest extends AuthenticatedRequest {
+  body: {
+    invoiceIds: string[];
+  };
+}
+
 export function createInvoiceController(invoiceService: InvoiceService) {
   return {
     async createInvoice(
@@ -292,6 +298,38 @@ export function createInvoiceController(invoiceService: InvoiceService) {
             return;
           }
           next(new HttpError(error.statusCode, error.message));
+          return;
+        }
+
+        next(error);
+      }
+    },
+
+    async batchPublishInvoices(
+      req: BatchPublishInvoicesRequest,
+      res: Response,
+      next: NextFunction,
+    ): Promise<void> {
+      try {
+        if (!req.user) {
+          throw new HttpError(401, "Authentication required");
+        }
+
+        const result = await invoiceService.publishInvoicesBatch({
+          invoiceIds: req.body.invoiceIds,
+          sellerId: req.user.id,
+        });
+
+        res.status(200).json({
+          success: true,
+          data: result,
+        });
+      } catch (error) {
+        if (error instanceof ServiceError) {
+          // Per-invoice rejections are the point of the endpoint: the seller
+          // needs to see every problem at once, so they are passed through as
+          // error details rather than collapsed into a message.
+          next(new HttpError(error.statusCode, error.message, error.details));
           return;
         }
 

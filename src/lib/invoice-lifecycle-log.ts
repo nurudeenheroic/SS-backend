@@ -4,9 +4,9 @@ import type { InvoiceStatus } from "../types/enums";
 
 export type InvoiceTransitionReason =
   | "seller_published"
+  | "seller_batch_published"
   | "fully_funded"
-  | "admin_settled"
-  | "admin_rejected";
+  | "admin_settled";
 
 export interface InvoiceTransitionLogInput {
   invoiceId: string;
