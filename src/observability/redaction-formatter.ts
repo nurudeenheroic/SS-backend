@@ -8,7 +8,7 @@ const STELLAR_SECRET_KEY_REDACTED =
 const JWT_PATTERN =
   /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+/g;
 
-const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9_\-.~+\/]+=*/g;
+const BEARER_PATTERN = /Bearer\s+[A-Za-z0-9_\-.~+/]+=*/g;
 
 const SENSITIVE_KEY_NAMES = new Set([
   "password",

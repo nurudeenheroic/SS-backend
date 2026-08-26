@@ -25,6 +25,7 @@ import type { InvoiceService } from "./services/invoice.service";
 import type { InvestmentService } from "./services/investment.service";
 import type { SettlementService } from "./services/settlement.service";
 import type { MarketplaceService } from "./services/marketplace.service";
+import type { KycService } from "./services/kyc.service";
 
 import dataSource from "./config/database";
 
@@ -61,6 +62,7 @@ export interface AppDependencies {
   investmentService?: InvestmentService;
   settlementService?: SettlementService;
   marketplaceService?: MarketplaceService;
+  kycService?: KycService;
   logger?: AppLogger;
   metricsEnabled?: boolean;
   metricsRegistry?: MetricsRegistry;
@@ -86,6 +88,7 @@ export function createApp({
   investmentService,
   settlementService,
   marketplaceService,
+  kycService,
   logger: appLogger = logger,
   metricsEnabled = true,
   metricsRegistry = new MetricsRegistry(),
@@ -107,6 +110,10 @@ export function createApp({
       credentials: http?.corsAllowCredentials ?? false,
     }),
   );
+
+  if (kycService) {
+    app.use("/api/v1/kyc", createKycWebhookRouter(kycService));
+  }
 
   app.use(express.json());
 
@@ -174,6 +181,10 @@ export function createApp({
 
   app.use("/api/v1/auth", createAuthRouter(authService));
 
+  if (kycService) {
+    app.use("/api/v1/kyc", createKycRouter(kycService, authService));
+  }
+
   if (notificationService) {
     app.use("/api/v1/notifications", createNotificationRouter(notificationService, authService));
   }
@@ -219,8 +230,11 @@ export function createApp({
     app.use("/api/v1/marketplace", createMarketplaceRouter({ marketplaceService }));
   }
 
-  if (config?.admin.ipWhitelist.length) {
-    app.use("/api/v1/admin", createAdminRouter({ dataSource, allowedCidrs: config.admin.ipWhitelist }));
+  if (config?.admin?.ipWhitelist?.length) {
+    app.use(
+      "/api/v1/admin",
+      createAdminRouter({ dataSource, allowedCidrs: config.admin.ipWhitelist, invoiceService }),
+    );
   }
 
   app.use(notFoundMiddleware);

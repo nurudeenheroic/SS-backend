@@ -81,6 +81,7 @@ function seedDraftInvoice(
     riskScore: null,
     status: InvoiceStatus.DRAFT,
     smartContractId: null,
+    rejectionReason: null,
     createdAt: now,
     updatedAt: now,
     deletedAt: null,

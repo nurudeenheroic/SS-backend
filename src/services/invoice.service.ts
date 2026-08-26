@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { Invoice } from "../models/Invoice.model";
 import { Investment } from "../models/Investment.model";
 import { User } from "../models/User.model";
-import { InvoiceStatus, KYCStatus, InvestmentStatus } from "../types/enums";
+import { InvoiceStatus, KYCStatus, InvestmentStatus, NotificationType } from "../types/enums";
 import { ServiceError } from "../utils/service-error";
 import { validateInvoiceForPublish } from "../lib/validate-invoice-for-publish";
 import { logInvoiceTransition } from "../lib/invoice-lifecycle-log";
@@ -24,10 +24,29 @@ export interface InvoiceRepositoryContract {
   create(data: Partial<Invoice>): Invoice;
 }
 
+/**
+ * Minimal contract for notifying a user, satisfied by
+ * `NotificationService.createNotification` (see notification.service.ts).
+ * Kept as a narrow structural type here (rather than importing
+ * `NotificationService` directly) to avoid coupling `InvoiceService` to the
+ * notification module's full surface area.
+ */
+export interface NotificationSink {
+  createNotification(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    message: string,
+  ): Promise<unknown>;
+}
+
 export interface InvoiceServiceDependencies {
   invoiceRepository: InvoiceRepositoryContract;
   ipfsService: IPFSService;
   dataSource?: DataSource;
+  /** Optional: enables `rejectInvoice` to notify the seller. If omitted,
+   *  rejection still persists the status/reason but skips notifying. */
+  notificationSink?: NotificationSink;
 }
 
 export interface UploadDocumentInput {
@@ -111,6 +130,7 @@ export interface InvoiceDTO {
   ipfsHash: string | null;
   riskScore: string | null;
   smartContractId: string | null;
+  rejectionReason: string | null;
   createdAt: Date;
   updatedAt: Date;
   commitments?: CommitmentDTO[];
@@ -128,22 +148,25 @@ export interface GetInvoicesOptions {
  */
 const VALID_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
   [InvoiceStatus.DRAFT]: [InvoiceStatus.PENDING, InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED],
-  [InvoiceStatus.PENDING]: [InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED],
+  [InvoiceStatus.PENDING]: [InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED, InvoiceStatus.REJECTED],
   [InvoiceStatus.PUBLISHED]: [InvoiceStatus.FUNDED, InvoiceStatus.CANCELLED],
   [InvoiceStatus.FUNDED]: [InvoiceStatus.SETTLED, InvoiceStatus.CANCELLED],
   [InvoiceStatus.SETTLED]: [],
   [InvoiceStatus.CANCELLED]: [],
+  [InvoiceStatus.REJECTED]: [],
 };
 
 export class InvoiceService {
   private readonly invoiceRepository: InvoiceRepositoryContract;
   private readonly ipfsService: IPFSService;
   private readonly dataSource?: DataSource;
+  private readonly notificationSink?: NotificationSink;
 
   constructor(dependencies: InvoiceServiceDependencies) {
     this.invoiceRepository = dependencies.invoiceRepository;
     this.ipfsService = dependencies.ipfsService;
     this.dataSource = dependencies.dataSource;
+    this.notificationSink = dependencies.notificationSink;
   }
 
   /**
@@ -700,6 +723,7 @@ export class InvoiceService {
       ipfsHash: invoice.ipfsHash,
       riskScore: invoice.riskScore,
       smartContractId: invoice.smartContractId,
+      rejectionReason: invoice.rejectionReason ?? null,
       createdAt: invoice.createdAt,
       updatedAt: invoice.updatedAt,
     };
@@ -708,7 +732,8 @@ export class InvoiceService {
 
 export function createInvoiceService(
   dataSource: DataSource,
-  ipfsService: IPFSService
+  ipfsService: IPFSService,
+  notificationSink?: NotificationSink
 ): InvoiceService {
   const invoiceRepository = dataSource.getRepository(Invoice);
 
@@ -716,5 +741,6 @@ export function createInvoiceService(
     invoiceRepository,
     ipfsService,
     dataSource,
+    notificationSink,
   });
 }

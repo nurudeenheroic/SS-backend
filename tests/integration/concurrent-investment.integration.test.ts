@@ -187,4 +187,91 @@ describe("Concurrent investment: total committed amount must not exceed invoice 
     const [saved] = [...investments.values()];
     expect(new Decimal(saved.investmentAmount).toFixed(4)).toBe("400.0000");
   });
+
+  it("allows both concurrent investments through when their combined total exactly equals remaining capacity", async () => {
+    // Two concurrent requests for 250 each against an empty 500-capacity invoice
+    // sum to exactly 500 — neither individually exceeds capacity at submit time,
+    // and since they're serialized, the second sees the first's 250 already
+    // committed and still fits in the remaining 250. Total must land exactly at
+    // capacity, both must succeed, and the invoice must transition to FUNDED.
+    const invoice = createInvoice({ netAmount: "500.0000", amount: "500.0000" });
+    const { dataSource, investments, invoices } = createSerializedFakeDataSource(invoice);
+
+    const investmentService = new InvestmentService(dataSource);
+    const investorA = { id: crypto.randomUUID(), wallet: INVESTOR_A_WALLET };
+    const investorB = { id: crypto.randomUUID(), wallet: INVESTOR_B_WALLET };
+
+    const results = await Promise.allSettled([
+      investmentService.createInvestment({
+        invoiceId: invoice.id,
+        investorId: investorA.id,
+        investmentAmount: "250.0000",
+        investorWallet: investorA.wallet,
+      }),
+      investmentService.createInvestment({
+        invoiceId: invoice.id,
+        investorId: investorB.id,
+        investmentAmount: "250.0000",
+        investorWallet: investorB.wallet,
+      }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    expect(fulfilled).toHaveLength(2);
+
+    const totalCommitted = [...investments.values()].reduce(
+      (sum, inv) => sum.plus(new Decimal(inv.investmentAmount)),
+      new Decimal(0),
+    );
+    expect(totalCommitted.toFixed(4)).toBe("500.0000");
+
+    // Invoice should be fully funded, not left PUBLISHED with 0 remaining capacity.
+    const updatedInvoice = invoices.get(invoice.id)!;
+    expect(updatedInvoice.status).toBe(InvoiceStatus.FUNDED);
+  });
+
+  it("enforces capacity across three simultaneous investors: exactly enough succeed to fill capacity, the rest are rejected", async () => {
+    // 1000 capacity, three concurrent requests for 400 each (1200 total demand).
+    // Serialized execution means exactly two fit (400 + 400 = 800 <= 1000) and
+    // the third's remaining capacity (200) is insufficient for its 400 request.
+    const invoice = createInvoice({ netAmount: "1000.0000", amount: "1000.0000" });
+    const { dataSource, investments } = createSerializedFakeDataSource(invoice);
+
+    const investmentService = new InvestmentService(dataSource);
+    const investors = [
+      { id: crypto.randomUUID(), wallet: INVESTOR_A_WALLET },
+      { id: crypto.randomUUID(), wallet: INVESTOR_B_WALLET },
+      { id: crypto.randomUUID(), wallet: "GINVESTORC1234567890ABCDEFGHIJKLMNOPQRSTUVWX2" },
+    ];
+
+    const results = await Promise.allSettled(
+      investors.map((investor) =>
+        investmentService.createInvestment({
+          invoiceId: invoice.id,
+          investorId: investor.id,
+          investmentAmount: "400.0000",
+          investorWallet: investor.wallet,
+        }),
+      ),
+    );
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+
+    expect(fulfilled).toHaveLength(2);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+      code: "INSUFFICIENT_CAPACITY",
+    });
+
+    // Total committed never exceeds the invoice's face value, and exactly two
+    // investment rows exist — the rejected request left no partial record.
+    expect(investments.size).toBe(2);
+    const totalCommitted = [...investments.values()].reduce(
+      (sum, inv) => sum.plus(new Decimal(inv.investmentAmount)),
+      new Decimal(0),
+    );
+    expect(totalCommitted.toFixed(4)).toBe("800.0000");
+    expect(totalCommitted.lte(new Decimal("1000.0000"))).toBe(true);
+  });
 });

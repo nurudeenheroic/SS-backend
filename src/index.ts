@@ -13,6 +13,7 @@ import { createIPFSService } from "./services/ipfs.service";
 import { createInvestmentService } from "./services/investment.service";
 import { createSettlementService } from "./services/settlement.service";
 import { createMarketplaceService } from "./services/marketplace.service";
+import { KycService } from "./services/kyc.service";
 
 export async function bootstrap(): Promise<{ server: Server }> {
   const config = getConfig();
@@ -24,10 +25,11 @@ export async function bootstrap(): Promise<{ server: Server }> {
   const authService = createAuthService(dataSource, config, logger);
   const notificationService = createNotificationService(dataSource);
   const ipfsService = createIPFSService(config.ipfs, logger);
-  const invoiceService = createInvoiceService(dataSource, ipfsService);
+  const invoiceService = createInvoiceService(dataSource, ipfsService, notificationService);
   const investmentService = createInvestmentService(dataSource);
   const settlementService = createSettlementService(dataSource);
   const marketplaceService = createMarketplaceService(dataSource);
+  const kycService = new KycService(dataSource, config.kyc.webhookSecret ?? "", logger);
 
   const app = createApp({
     authService,
@@ -36,6 +38,7 @@ export async function bootstrap(): Promise<{ server: Server }> {
     investmentService,
     settlementService,
     marketplaceService,
+    kycService,
     config,
     logger,
     metricsEnabled: config.observability.metricsEnabled,
