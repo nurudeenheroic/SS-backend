@@ -7,14 +7,27 @@ import { createAuthRateLimitMiddleware } from "../middleware/rate-limit.middlewa
 import type { AuthService } from "../services/auth.service";
 import type { AppLogger } from "../observability/logger";
 
+// Strict schemas: enforce Stellar G... format hint, length bounds, and sanitized inputs
+const STELLAR_PUBLIC_KEY_PATTERN = /^G[A-Z2-7]{55}$/;
+
 const challengeSchema = Joi.object({
-  publicKey: Joi.string().trim().required(),
+  publicKey: Joi.string()
+    .trim()
+    .pattern(STELLAR_PUBLIC_KEY_PATTERN)
+    .message("publicKey must be a valid Stellar public key")
+    .required()
+    .max(56),
 });
 
 const verifySchema = Joi.object({
-  publicKey: Joi.string().trim().required(),
-  nonce: Joi.string().trim().required(),
-  signature: Joi.string().trim().required(),
+  publicKey: Joi.string()
+    .trim()
+    .pattern(STELLAR_PUBLIC_KEY_PATTERN)
+    .message("publicKey must be a valid Stellar public key")
+    .required()
+    .max(56),
+  nonce: Joi.string().trim().required().min(16).max(256),
+  signature: Joi.string().trim().required().min(16).max(512),
 });
 
 export function createAuthRouter(authService: AuthService, logger: AppLogger): Router {
