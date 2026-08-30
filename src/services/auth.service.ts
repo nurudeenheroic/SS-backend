@@ -6,7 +6,8 @@ import type { AppConfig } from "../config/env";
 import { AuthChallenge } from "../models/AuthChallenge.model";
 import { User } from "../models/User.model";
 import type { PublicUser } from "../types/auth";
-import { HttpError } from "../utils/http-error";
+import { AppError, HttpError } from "../utils/http-error";
+import { logger } from "../observability/logger";
 import {
   buildAuthFailureDetails,
   classifyJwtError,
