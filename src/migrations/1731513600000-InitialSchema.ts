@@ -7,6 +7,21 @@ export class InitialSchema1731513600000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     try {
+      logger.info("Executing up migration for InitialSchema1731513600000");
+
+      await queryRunner.query(`
+        CREATE TYPE "public"."users_usertype_enum" AS ENUM('seller', 'investor', 'both');
+        CREATE TYPE "public"."users_kycstatus_enum" AS ENUM('pending', 'in_review', 'approved', 'rejected');
+        CREATE TYPE "public"."invoices_invoicestatus_enum" AS ENUM('draft', 'pending', 'published', 'funded', 'settled', 'cancelled', 'rejected');
+        CREATE TYPE "public"."investments_investmentstatus_enum" AS ENUM('pending', 'confirmed', 'settled', 'cancelled');
+        CREATE TYPE "public"."transactions_transactiontype_enum" AS ENUM('investment', 'payment', 'withdrawal', 'refund');
+        CREATE TYPE "public"."transactions_transactionstatus_enum" AS ENUM('pending', 'completed', 'failed');
+        CREATE TYPE "public"."kyc_verifications_verificationtype_enum" AS ENUM('identity', 'address', 'business');
+        CREATE TYPE "public"."notifications_notificationtype_enum" AS ENUM('invoice', 'investment', 'payment', 'kyc', 'system');
+      `);
+
+      await queryRunner.query(`
+        CREATE TABLE "users" (
       // 1. Create Enum Types safely
       await queryRunner.query(`
         DO $$ BEGIN
@@ -86,6 +101,17 @@ export class InitialSchema1731513600000 implements MigrationInterface {
           CONSTRAINT "PK_invoices" PRIMARY KEY ("id"),
           CONSTRAINT "FK_invoices_seller" FOREIGN KEY ("seller_id") REFERENCES "users"("id") ON DELETE CASCADE
         );
+        CREATE INDEX "idx_invoices_seller_id" ON "invoices" ("seller_id");
+        CREATE UNIQUE INDEX "idx_invoices_invoice_number" ON "invoices" ("invoice_number");
+        CREATE INDEX "idx_invoices_customer_name" ON "invoices" ("customer_name");
+        CREATE INDEX "idx_invoices_due_date" ON "invoices" ("due_date");
+        CREATE INDEX "idx_invoices_status" ON "invoices" ("status");
+        CREATE INDEX "idx_invoices_status_seller_id" ON "invoices" ("status", "seller_id");
+        CREATE INDEX "idx_invoices_status_due_date" ON "invoices" ("status", "due_date");
+      `);
+
+      await queryRunner.query(`
+        CREATE TABLE "investments" (
         CREATE INDEX IF NOT EXISTS "idx_invoices_seller_id" ON "invoices" ("seller_id");
         CREATE UNIQUE INDEX IF NOT EXISTS "idx_invoices_invoice_number" ON "invoices" ("invoice_number");
         CREATE INDEX IF NOT EXISTS "idx_invoices_customer_name" ON "invoices" ("customer_name");
@@ -118,6 +144,15 @@ export class InitialSchema1731513600000 implements MigrationInterface {
           CONSTRAINT "FK_investments_invoice" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE CASCADE,
           CONSTRAINT "FK_investments_investor" FOREIGN KEY ("investor_id") REFERENCES "users"("id") ON DELETE CASCADE
         );
+        CREATE INDEX "idx_investments_invoice_id" ON "investments" ("invoice_id");
+        CREATE INDEX "idx_investments_investor_id" ON "investments" ("investor_id");
+        CREATE INDEX "idx_investments_status" ON "investments" ("status");
+        CREATE INDEX "idx_investments_invoice_status" ON "investments" ("invoice_id", "status");
+        CREATE INDEX "idx_investments_investor_status" ON "investments" ("investor_id", "status");
+      `);
+
+      await queryRunner.query(`
+        CREATE TABLE "transactions" (
         CREATE INDEX IF NOT EXISTS "idx_investments_invoice_id" ON "investments" ("invoice_id");
         CREATE INDEX IF NOT EXISTS "idx_investments_investor_id" ON "investments" ("investor_id");
         CREATE INDEX IF NOT EXISTS "idx_investments_status" ON "investments" ("status");
