@@ -17,6 +17,7 @@ import { logger } from "../observability/logger";
 
 @Entity("transactions")
 @Index("idx_transactions_status_type_timestamp", ["status", "type", "timestamp"])
+@Index("idx_transactions_user_id_timestamp", ["userId", "timestamp"])
 @Index("idx_transactions_user_status_timestamp", ["userId", "status", "timestamp"])
 @Index("idx_transactions_investment_status", ["investmentId", "status"])
 @Index("idx_transactions_invoice_status", ["invoiceId", "status"])
