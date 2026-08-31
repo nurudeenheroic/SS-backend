@@ -551,4 +551,3 @@ export class Invoice {
     }
   }
 }
-
