@@ -294,7 +294,19 @@ export class User {
   /**
    * Converts user entity to public DTO, excluding sensitive fields.
    */
-  static toPublicDTO(user: User): Omit<User, "deleted_at"> {
+  static toPublicDTO(
+    user: User,
+  ): Pick<
+    User,
+    | "id"
+    | "stellarAddress"
+    | "email"
+    | "userType"
+    | "kycStatus"
+    | "isKycVerified"
+    | "createdAt"
+    | "updatedAt"
+  > {
     try {
       const dto = {
         id: user.id,
@@ -320,3 +332,4 @@ export class User {
       );
     }
   }
+}

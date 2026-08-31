@@ -139,6 +139,38 @@ async function fullyFundInvoice(
   return created;
 }
 
+// ── Helper: locate a specific structured log call ──────────────────────────
+//
+// `fullyFundInvoice` emits its own "Invoice lifecycle state transition." log
+// (published -> funded, reason "fully_funded") before settlement runs, so a
+// bare `.find(([msg]) => msg === "...transition.")` would match the funding
+// event instead of the settlement one. Match on the metadata too.
+
+type LogCall = [string, Record<string, unknown>?];
+
+function findLogCall(
+  infoSpy: jest.SpyInstance,
+  message: string,
+  predicate: (meta: Record<string, unknown>) => boolean = () => true,
+): LogCall | undefined {
+  return (infoSpy.mock.calls as LogCall[]).find(
+    ([loggedMessage, meta]) =>
+      loggedMessage === message && predicate((meta ?? {}) as Record<string, unknown>),
+  );
+}
+
+function findSettlementTransitionLog(infoSpy: jest.SpyInstance): LogCall | undefined {
+  return findLogCall(
+    infoSpy,
+    "Invoice lifecycle state transition.",
+    (meta) => meta.reason === "admin_settled",
+  );
+}
+
+function findSettlementCompletionLog(infoSpy: jest.SpyInstance): LogCall | undefined {
+  return findLogCall(infoSpy, "Settlement flow completed.");
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Settlement integration: rejecting settlement of non-fully-funded invoices
 // ═══════════════════════════════════════════════════════════════════════════
@@ -339,9 +371,7 @@ describe("Settlement integration: funding multiple investors then settling", () 
       actorWallet: "GADMINWALLET1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     });
 
-    const completionCall = infoSpy.mock.calls.find(
-      ([message]) => message === "Settlement flow completed.",
-    );
+    const completionCall = findSettlementCompletionLog(infoSpy);
     expect(completionCall).toBeDefined();
 
     const metadata = completionCall?.[1] as Record<string, unknown>;
@@ -368,10 +398,7 @@ describe("Settlement integration: funding multiple investors then settling", () 
       }),
     ).rejects.toThrow();
 
-    const completionCall = infoSpy.mock.calls.find(
-      ([message]) => message === "Settlement flow completed.",
-    );
-    expect(completionCall).toBeUndefined();
+    expect(findSettlementCompletionLog(infoSpy)).toBeUndefined();
   });
 });
 
@@ -747,9 +774,7 @@ describe("Settlement integration: pro-rata distribution edge cases", () => {
       actorWallet: "GADMINWALLET1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     });
 
-    const lifecycleCall = infoSpy.mock.calls.find(
-      ([message]) => message === "Invoice lifecycle state transition.",
-    );
+    const lifecycleCall = findSettlementTransitionLog(infoSpy);
     expect(lifecycleCall).toBeDefined();
 
     const metadata = lifecycleCall?.[1] as Record<string, unknown>;
@@ -775,10 +800,7 @@ describe("Settlement integration: pro-rata distribution edge cases", () => {
       }),
     ).rejects.toThrow();
 
-    const lifecycleCall = infoSpy.mock.calls.find(
-      ([message]) => message === "Invoice lifecycle state transition.",
-    );
-    expect(lifecycleCall).toBeUndefined();
+    expect(findSettlementTransitionLog(infoSpy)).toBeUndefined();
   });
 });
 
@@ -809,12 +831,8 @@ describe("Settlement integration: logging verification", () => {
       actorWallet: "GADMINWALLET1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     });
 
-    const lifecycleCall = infoSpy.mock.calls.find(
-      ([msg]) => msg === "Invoice lifecycle state transition.",
-    );
-    const completionCall = infoSpy.mock.calls.find(
-      ([msg]) => msg === "Settlement flow completed.",
-    );
+    const lifecycleCall = findSettlementTransitionLog(infoSpy);
+    const completionCall = findSettlementCompletionLog(infoSpy);
 
     expect(lifecycleCall).toBeDefined();
     expect(completionCall).toBeDefined();
@@ -843,14 +861,7 @@ describe("Settlement integration: logging verification", () => {
       }),
     ).rejects.toThrow(/Invoice not found/);
 
-    const lifecycleCall = infoSpy.mock.calls.find(
-      ([msg]) => msg === "Invoice lifecycle state transition.",
-    );
-    const completionCall = infoSpy.mock.calls.find(
-      ([msg]) => msg === "Settlement flow completed.",
-    );
-
-    expect(lifecycleCall).toBeUndefined();
-    expect(completionCall).toBeUndefined();
+    expect(findSettlementTransitionLog(infoSpy)).toBeUndefined();
+    expect(findSettlementCompletionLog(infoSpy)).toBeUndefined();
   });
 });
