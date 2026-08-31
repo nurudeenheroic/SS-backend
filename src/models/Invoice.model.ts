@@ -19,7 +19,7 @@ import { AppError } from "../utils/http-error";
  * Frozen state transition map optimized for performance.
  * Prevents accidental mutations and enables faster lookups.
  */
-export const VALID_INVOICE_TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = Object.freeze({
+export const VALID_INVOICE_TRANSITIONS: Record<InvoiceStatus, readonly InvoiceStatus[]> = Object.freeze({
   [InvoiceStatus.DRAFT]: Object.freeze([InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED, InvoiceStatus.REJECTED]),
   [InvoiceStatus.PENDING]: Object.freeze([InvoiceStatus.PUBLISHED, InvoiceStatus.CANCELLED, InvoiceStatus.REJECTED]),
   [InvoiceStatus.PUBLISHED]: Object.freeze([InvoiceStatus.FUNDED, InvoiceStatus.CANCELLED]),
