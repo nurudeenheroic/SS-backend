@@ -802,21 +802,6 @@ export class InvoiceService {
         "Token holders can only be queried for published invoices",
         400
       );
-
-      // Update invoice with IPFS hash
-      invoice.ipfsHash = uploadResult.hash;
-      await this.invoiceRepository.save(invoice);
-
-      return {
-        invoiceId: input.invoiceId,
-        ipfsHash: uploadResult.hash,
-        fileSize: uploadResult.size,
-        uploadedAt: uploadResult.timestamp,
-      };
-    } catch (error) {
-      if (error instanceof ServiceError) throw error;
-      logger.error('Failed to process', { error });
-      throw new AppError(500, 'Processing failed', 'PROCESSING_FAILED', { error });
     }
 
     if (!this.dataSource) {
