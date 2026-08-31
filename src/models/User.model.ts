@@ -294,9 +294,9 @@ export class User {
   /**
    * Converts user entity to public DTO, excluding sensitive fields.
    */
-  static toPublicDTO(user: User): Omit<User, "deleted_at"> {
+  static toPublicDTO(user: User): Omit<User, "deletedAt"> {
     try {
-      const dto = {
+      const dto: Omit<User, "deletedAt"> = {
         id: user.id,
         stellarAddress: user.stellarAddress,
         email: user.email,
@@ -305,6 +305,11 @@ export class User {
         isKycVerified: user.isKycVerified,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        invoices: user.invoices,
+        investments: user.investments,
+        transactions: user.transactions,
+        kycVerifications: user.kycVerifications,
+        notifications: user.notifications,
       };
       return dto;
     } catch (error) {
@@ -320,3 +325,4 @@ export class User {
       );
     }
   }
+}

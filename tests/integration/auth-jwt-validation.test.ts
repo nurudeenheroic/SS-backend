@@ -50,6 +50,7 @@ class InMemoryUserRepository implements UserRepositoryContract {
       email: user.email ?? null,
       userType: user.userType ?? UserType.INVESTOR,
       kycStatus: user.kycStatus ?? KYCStatus.PENDING,
+      isKycVerified: user.isKycVerified ?? false,
       createdAt: user.createdAt ?? now,
       updatedAt: user.updatedAt ?? now,
       deletedAt: user.deletedAt ?? null,
@@ -135,30 +136,38 @@ function createTestApp() {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("JWT authentication validation", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("rejects GET /api/v1/auth/me when the JWT is signed with an invalid secret key", async () => {
-    const app = createTestApp();
+    try {
+      const app = createTestApp();
 
-    const forgedToken = jwt.sign(
-      {
-        sub: "GFORGED_STELLAR_ADDRESS",
-        stellarAddress: "GFORGED_STELLAR_ADDRESS",
-        userId: crypto.randomUUID(),
-      },
-      "invalid-secret-key",
-      { expiresIn: "15m" },
-    );
+      const forgedToken = jwt.sign(
+        {
+          sub: "GFORGED_STELLAR_ADDRESS",
+          stellarAddress: "GFORGED_STELLAR_ADDRESS",
+          userId: crypto.randomUUID(),
+        },
+        "invalid-secret-key",
+        { expiresIn: "15m" },
+      );
 
-    const response = await request(app)
-      .get("/api/v1/auth/me")
-      .set("Authorization", `Bearer ${forgedToken}`)
-      .expect(401);
+      const response = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", `Bearer ${forgedToken}`)
+        .expect(401);
 
-    expect(response.body).toMatchObject({
-      success: false,
-      error: {
-        message: "Invalid or expired token.",
-      },
-    });
+      expect(response.body).toMatchObject({
+        success: false,
+        error: {
+          message: "Invalid or expired token.",
+        },
+      });
+    } catch (error) {
+      throw new Error(`JWT validation test failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
   it("rejects GET /api/v1/auth/me with expired JWT token", async () => {
@@ -206,20 +215,28 @@ describe("JWT authentication validation", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("JWT validation: malformed tokens", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("rejects a completely random non-JWT string", async () => {
-    const app = createTestApp();
+    try {
+      const app = createTestApp();
 
-    const response = await request(app)
-      .get("/api/v1/auth/me")
-      .set("Authorization", "Bearer not-a-jwt-at-all")
-      .expect(401);
+      const response = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", "Bearer not-a-jwt-at-all")
+        .expect(401);
 
-    expect(response.body).toMatchObject({
-      success: false,
-      error: {
-        message: "Invalid or expired token.",
-      },
-    });
+      expect(response.body).toMatchObject({
+        success: false,
+        error: {
+          message: "Invalid or expired token.",
+        },
+      });
+    } catch (error) {
+      throw new Error(`Malformed token test failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
   it("rejects a token with only two parts (missing signature)", async () => {
@@ -289,31 +306,38 @@ describe("JWT validation: malformed tokens", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("JWT validation: algorithm and signing attacks", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("rejects a token signed with 'none' algorithm", async () => {
-    const app = createTestApp();
+    try {
+      const app = createTestApp();
 
-    // jwt.sign with algorithm: 'none' produces an unsigned token
-    const unsignedToken = jwt.sign(
-      {
-        sub: "GNONEALGADDRESS",
-        stellarAddress: "GNONEALGADDRESS",
-        userId: crypto.randomUUID(),
-      },
-      "",
-      { algorithm: "none", expiresIn: "15m" },
-    );
+      const unsignedToken = jwt.sign(
+        {
+          sub: "GNONEALGADDRESS",
+          stellarAddress: "GNONEALGADDRESS",
+          userId: crypto.randomUUID(),
+        },
+        "",
+        { algorithm: "none", expiresIn: "15m" },
+      );
 
-    const response = await request(app)
-      .get("/api/v1/auth/me")
-      .set("Authorization", `Bearer ${unsignedToken}`)
-      .expect(401);
+      const response = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", `Bearer ${unsignedToken}`)
+        .expect(401);
 
-    expect(response.body).toMatchObject({
-      success: false,
-      error: {
-        message: "Invalid or expired token.",
-      },
-    });
+      expect(response.body).toMatchObject({
+        success: false,
+        error: {
+          message: "Invalid or expired token.",
+        },
+      });
+    } catch (error) {
+      throw new Error(`Algorithm attack test failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
   it("rejects a token signed with a different HS256 secret", async () => {
@@ -385,29 +409,37 @@ describe("JWT validation: algorithm and signing attacks", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("JWT validation: missing or invalid claims", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("rejects a token with no sub claim", async () => {
-    const app = createTestApp();
+    try {
+      const app = createTestApp();
 
-    const token = jwt.sign(
-      {
-        stellarAddress: "GNOSUBCLAIM",
-        userId: crypto.randomUUID(),
-      },
-      VALID_JWT_SECRET,
-      { expiresIn: "15m" },
-    );
+      const token = jwt.sign(
+        {
+          stellarAddress: "GNOSUBCLAIM",
+          userId: crypto.randomUUID(),
+        },
+        VALID_JWT_SECRET,
+        { expiresIn: "15m" },
+      );
 
-    const response = await request(app)
-      .get("/api/v1/auth/me")
-      .set("Authorization", `Bearer ${token}`)
-      .expect(401);
+      const response = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(401);
 
-    expect(response.body).toMatchObject({
-      success: false,
-      error: {
-        message: "Invalid or expired token.",
-      },
-    });
+      expect(response.body).toMatchObject({
+        success: false,
+        error: {
+          message: "Invalid or expired token.",
+        },
+      });
+    } catch (error) {
+      throw new Error(`Claims validation test failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
   it("rejects a token with an empty sub claim", async () => {
@@ -494,30 +526,38 @@ describe("JWT validation: missing or invalid claims", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("JWT validation: Authorization header edge cases", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("rejects request with lowercase 'bearer' prefix", async () => {
-    const app = createTestApp();
+    try {
+      const app = createTestApp();
 
-    const token = jwt.sign(
-      {
-        sub: "GLOWERCASEBEARER",
-        stellarAddress: "GLOWERCASEBEARER",
-        userId: crypto.randomUUID(),
-      },
-      VALID_JWT_SECRET,
-      { expiresIn: "15m" },
-    );
+      const token = jwt.sign(
+        {
+          sub: "GLOWERCASEBEARER",
+          stellarAddress: "GLOWERCASEBEARER",
+          userId: crypto.randomUUID(),
+        },
+        VALID_JWT_SECRET,
+        { expiresIn: "15m" },
+      );
 
-    const response = await request(app)
-      .get("/api/v1/auth/me")
-      .set("Authorization", `bearer ${token}`)
-      .expect(401);
+      const response = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", `bearer ${token}`)
+        .expect(401);
 
-    expect(response.body).toMatchObject({
-      success: false,
-      error: {
-        message: "Authorization token is required.",
-      },
-    });
+      expect(response.body).toMatchObject({
+        success: false,
+        error: {
+          message: "Authorization token is required.",
+        },
+      });
+    } catch (error) {
+      throw new Error(`Bearer prefix test failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
   it("rejects request with raw token (no Bearer prefix)", async () => {
@@ -603,27 +643,35 @@ describe("JWT validation: Authorization header edge cases", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("JWT validation: error response structure", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("returns consistent error envelope on forged token", async () => {
-    const app = createTestApp();
+    try {
+      const app = createTestApp();
 
-    const forgedToken = jwt.sign(
-      {
-        sub: "GSTRUCTTEST1",
-        stellarAddress: "GSTRUCTTEST1",
-      },
-      "wrong-secret",
-      { expiresIn: "15m" },
-    );
+      const forgedToken = jwt.sign(
+        {
+          sub: "GSTRUCTTEST1",
+          stellarAddress: "GSTRUCTTEST1",
+        },
+        "wrong-secret",
+        { expiresIn: "15m" },
+      );
 
-    const response = await request(app)
-      .get("/api/v1/auth/me")
-      .set("Authorization", `Bearer ${forgedToken}`)
-      .expect(401);
+      const response = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", `Bearer ${forgedToken}`)
+        .expect(401);
 
-    expect(response.body).toHaveProperty("success", false);
-    expect(response.body).toHaveProperty("error");
-    expect(response.body.error).toHaveProperty("message");
-    expect(typeof response.body.error.message).toBe("string");
+      expect(response.body).toHaveProperty("success", false);
+      expect(response.body).toHaveProperty("error");
+      expect(response.body.error).toHaveProperty("message");
+      expect(typeof response.body.error.message).toBe("string");
+    } catch (error) {
+      throw new Error(`Error envelope test failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
   it("returns consistent error envelope on expired token", async () => {
@@ -683,30 +731,38 @@ describe("JWT validation: error response structure", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("JWT validation: token timing edge cases", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("rejects a token with nbf set far in the future", async () => {
-    const app = createTestApp();
+    try {
+      const app = createTestApp();
 
-    const futureToken = jwt.sign(
-      {
-        sub: "GFUTURETOKEN",
-        stellarAddress: "GFUTURETOKEN",
-        userId: crypto.randomUUID(),
-      },
-      VALID_JWT_SECRET,
-      { expiresIn: "15m", notBefore: "1h" },
-    );
+      const futureToken = jwt.sign(
+        {
+          sub: "GFUTURETOKEN",
+          stellarAddress: "GFUTURETOKEN",
+          userId: crypto.randomUUID(),
+        },
+        VALID_JWT_SECRET,
+        { expiresIn: "15m", notBefore: "1h" },
+      );
 
-    const response = await request(app)
-      .get("/api/v1/auth/me")
-      .set("Authorization", `Bearer ${futureToken}`)
-      .expect(401);
+      const response = await request(app)
+        .get("/api/v1/auth/me")
+        .set("Authorization", `Bearer ${futureToken}`)
+        .expect(401);
 
-    expect(response.body).toMatchObject({
-      success: false,
-      error: {
-        message: "Invalid or expired token.",
-      },
-    });
+      expect(response.body).toMatchObject({
+        success: false,
+        error: {
+          message: "Invalid or expired token.",
+        },
+      });
+    } catch (error) {
+      throw new Error(`Future token test failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   });
 
   it("accepts a token with iat set to now and exp set to far future", async () => {
