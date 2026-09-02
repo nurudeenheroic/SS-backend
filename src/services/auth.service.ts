@@ -4,7 +4,7 @@ import { DataSource, IsNull, Repository } from "typeorm";
 import { Keypair, StrKey } from "stellar-sdk";
 import type { AppConfig } from "../config/env";
 import { AuthChallenge } from "../models/AuthChallenge.model";
-import { User } from "../models/User.model";
+import { User, USER_PROFILE_SELECT } from "../models/User.model";
 import type { PublicUser } from "../types/auth";
 import { HttpError } from "../utils/http-error";
 import {
@@ -363,12 +363,14 @@ class TypeOrmUserRepository implements UserRepositoryContract {
   findById(id: string): Promise<User | null> {
     return this.repository.findOne({
       where: { id },
+      select: USER_PROFILE_SELECT,
     });
   }
 
   findByStellarAddress(stellarAddress: string): Promise<User | null> {
     return this.repository.findOne({
       where: { stellarAddress },
+      select: USER_PROFILE_SELECT,
     });
   }
 
