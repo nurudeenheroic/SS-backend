@@ -21,6 +21,12 @@ const USER_VALIDATION_CONSTRAINTS = Object.freeze({
   EMAIL_PATTERN: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
 });
 
+/** Columns used by profile lookups; relations are loaded explicitly by callers that need them. */
+export const USER_PROFILE_SELECT = [
+  "id", "stellarAddress", "email", "userType", "kycStatus",
+  "isKycVerified", "createdAt", "updatedAt", "deletedAt",
+] as const;
+
 @Entity("users")
 @Index("idx_users_user_type_kyc_status", ["userType", "kycStatus"])
 export class User {
