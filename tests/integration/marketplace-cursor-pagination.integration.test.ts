@@ -1,13 +1,19 @@
 import "reflect-metadata";
 import crypto from "crypto";
 import { DataSource, getMetadataArgsStorage } from "typeorm";
-import { MarketplaceService, createMarketplaceService } from "../../src/services/marketplace.service";
+import {
+  MarketplaceService,
+  createMarketplaceService,
+} from "../../src/services/marketplace.service";
 import { Invoice } from "../../src/models/Invoice.model";
 import { User } from "../../src/models/User.model";
 import { Investment } from "../../src/models/Investment.model";
 import { Transaction } from "../../src/models/Transaction.model";
 import { KYCVerification } from "../../src/models/KYCVerification.model";
 import { Notification } from "../../src/models/Notification.model";
+import { KycHistory } from "../../src/models/KycHistory.model";
+import { SecondaryListing } from "../../src/models/SecondaryListing.model";
+import { Watchlist } from "../../src/models/Watchlist.model";
 import { AuthChallenge } from "../../src/models/AuthChallenge.model";
 import { InvoiceStatus, UserType, KYCStatus } from "../../src/types/enums";
 
@@ -51,7 +57,18 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
       database: ":memory:",
       synchronize: true,
       logging: false,
-      entities: [User, Invoice, Investment, Transaction, KYCVerification, Notification, AuthChallenge],
+      entities: [
+        User,
+        Invoice,
+        Investment,
+        Transaction,
+        KYCVerification,
+        Notification,
+        KycHistory,
+        SecondaryListing,
+        Watchlist,
+        AuthChallenge,
+      ],
     });
 
     await dataSource.initialize();
@@ -63,7 +80,7 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
         email: "seller-cursor@test.com",
         userType: UserType.SELLER,
         kycStatus: KYCStatus.APPROVED,
-      } as any),
+      } as any)
     )) as unknown as User;
     sellerId = seller.id;
 
@@ -99,15 +116,12 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
         status: InvoiceStatus.PUBLISHED,
         smartContractId: null,
         ...overrides,
-      } as any),
+      } as any)
     )) as unknown as Invoice;
   }
 
   /** Seeds `count` listings that all share the same primary sort value. */
-  async function seedTiedListings(
-    count: number,
-    shared: Partial<Invoice>,
-  ): Promise<string[]> {
+  async function seedTiedListings(count: number, shared: Partial<Invoice>): Promise<string[]> {
     const ids: string[] = [];
     for (let i = 0; i < count; i += 1) {
       const invoice = await seedInvoice(shared);
@@ -118,7 +132,7 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
 
   async function collectAllPages(
     sortField: "amount" | "created_at",
-    limit: number,
+    limit: number
   ): Promise<string[]> {
     const ordered: string[] = [];
     let cursor: string | null = null;
@@ -132,7 +146,7 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
           order: "DESC",
           limit,
           cursor,
-        },
+        }
       );
       page.data.forEach((invoice) => ordered.push(invoice.id));
       pages += 1;
@@ -147,7 +161,10 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
   }
 
   it("pages over equal face values with deterministic id tie-ins (no repeats, no skips)", async () => {
-    const expected = await seedTiedListings(7, { amount: "5000.0000", status: InvoiceStatus.PUBLISHED });
+    const expected = await seedTiedListings(7, {
+      amount: "5000.0000",
+      status: InvoiceStatus.PUBLISHED,
+    });
     const idAsc = [...expected].sort((a, b) => a.localeCompare(b));
 
     const ordered = await collectAllPages("amount", 2);
@@ -169,7 +186,7 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
 
     const page = await service.getPublishedInvoicesByCursor(
       { status: [InvoiceStatus.PUBLISHED] },
-      { sortField: "amount", order: "DESC", limit: 10 },
+      { sortField: "amount", order: "DESC", limit: 10 }
     );
 
     const amounts = page.data.map((invoice) => Number(invoice.amount));
@@ -193,10 +210,7 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
 
     // Force the created_at column to an identical value so the primary sort is
     // genuinely tied (CreateDateColumn otherwise timestamps each insert).
-    await dataSource.query(
-      `UPDATE invoices SET created_at = ?`,
-      [fixedCreatedAt.toISOString()],
-    );
+    await dataSource.query(`UPDATE invoices SET created_at = ?`, [fixedCreatedAt.toISOString()]);
 
     const idAsc = [...ids].sort((a, b) => a.localeCompare(b));
     const ordered = await collectAllPages("created_at", 3);
@@ -210,20 +224,24 @@ describe("Marketplace cursor pagination stable ordering (issue #226)", () => {
     await expect(
       service.getPublishedInvoicesByCursor(
         { status: [InvoiceStatus.PUBLISHED] },
-        { sortField: "amount", order: "DESC", limit: 10, cursor: "not-valid-cursor!!" },
-      ),
+        { sortField: "amount", order: "DESC", limit: 10, cursor: "not-valid-cursor!!" }
+      )
     ).rejects.toMatchObject({ code: "invalid_cursor", statusCode: 400 });
   });
 
   it("returns the expected client error when a cursor is encoded for a different field", async () => {
     const { encodeQueryCursor } = await import("../../src/utils/query-pagination.utils");
-    const wrongFieldCursor = encodeQueryCursor("invoice.dueDate", "2026-01-31T00:00:00.000Z", "some-id");
+    const wrongFieldCursor = encodeQueryCursor(
+      "invoice.dueDate",
+      "2026-01-31T00:00:00.000Z",
+      "some-id"
+    );
 
     await expect(
       service.getPublishedInvoicesByCursor(
         { status: [InvoiceStatus.PUBLISHED] },
-        { sortField: "amount", order: "DESC", limit: 10, cursor: wrongFieldCursor },
-      ),
+        { sortField: "amount", order: "DESC", limit: 10, cursor: wrongFieldCursor }
+      )
     ).rejects.toMatchObject({ code: "invalid_cursor", statusCode: 400 });
   });
 });

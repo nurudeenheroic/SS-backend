@@ -68,7 +68,9 @@ describe("paginateQuery", () => {
 
   it("uses a returned cursor to fetch the subsequent page, filtering strictly past it", async () => {
     const cursor = encodeQueryCursor("row.createdAt", new Date("2024-01-02T00:00:00.000Z"));
-    const qb = makeQueryBuilder([makeRow({ id: "3", createdAt: new Date("2024-01-01T00:00:00.000Z") })]);
+    const qb = makeQueryBuilder([
+      makeRow({ id: "3", createdAt: new Date("2024-01-01T00:00:00.000Z") }),
+    ]);
 
     const result = await paginateQuery({
       queryBuilder: qb,
@@ -155,7 +157,7 @@ describe("paginateQuery", () => {
         cursorField: "row.createdAt",
         limit: 5,
         cursor,
-      }),
+      })
     ).rejects.toThrow(/was encoded for field "row.score"/);
   });
 
@@ -168,7 +170,7 @@ describe("paginateQuery", () => {
         cursorField: "row.createdAt",
         limit: 5,
         cursor: "not-valid-base64-json!!",
-      }),
+      })
     ).rejects.toThrow(/Invalid cursor/);
   });
 
@@ -176,11 +178,11 @@ describe("paginateQuery", () => {
     const qb = makeQueryBuilder([]);
 
     await expect(
-      paginateQuery({ queryBuilder: qb, cursorField: "row.createdAt", limit: 0 }),
+      paginateQuery({ queryBuilder: qb, cursorField: "row.createdAt", limit: 0 })
     ).rejects.toThrow(/positive integer/);
 
     await expect(
-      paginateQuery({ queryBuilder: qb, cursorField: "row.createdAt", limit: 1.5 }),
+      paginateQuery({ queryBuilder: qb, cursorField: "row.createdAt", limit: 1.5 })
     ).rejects.toThrow(/positive integer/);
   });
 
@@ -188,7 +190,7 @@ describe("paginateQuery", () => {
     const qb = makeQueryBuilder([]);
 
     await expect(
-      paginateQuery({ queryBuilder: qb, cursorField: "createdAt", limit: 5 }),
+      paginateQuery({ queryBuilder: qb, cursorField: "createdAt", limit: 5 })
     ).rejects.toThrow(/Invalid cursorField/);
   });
 
@@ -258,7 +260,7 @@ describe("paginateQuery", () => {
 
     expect(qb.andWhere).toHaveBeenCalledWith(
       "(row.score < :cursor_row_score OR (row.score = :cursor_row_score AND row.id > :cursor_row_id))",
-      { cursor_row_score: 90, cursor_row_id: "2" },
+      { cursor_row_score: 90, cursor_row_id: "2" }
     );
   });
 
@@ -276,7 +278,7 @@ describe("paginateQuery", () => {
 
     expect(qb.andWhere).toHaveBeenCalledWith(
       "(row.score > :cursor_row_score OR (row.score = :cursor_row_score AND row.id > :cursor_row_id))",
-      { cursor_row_score: 90, cursor_row_id: "2" },
+      { cursor_row_score: 90, cursor_row_id: "2" }
     );
   });
 });
@@ -295,7 +297,10 @@ describe("encodeQueryCursor / decodeQueryCursor", () => {
   it("round-trips a Date value as an ISO string", () => {
     const date = new Date("2024-06-15T12:00:00.000Z");
     const cursor = encodeQueryCursor("row.createdAt", date);
-    expect(decodeQueryCursor(cursor)).toEqual({ field: "row.createdAt", value: date.toISOString() });
+    expect(decodeQueryCursor(cursor)).toEqual({
+      field: "row.createdAt",
+      value: date.toISOString(),
+    });
   });
 
   it("produces an opaque base64 string that does not leak plaintext field/value", () => {

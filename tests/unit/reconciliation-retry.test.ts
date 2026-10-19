@@ -16,7 +16,7 @@ describe("classifyReconciliationError", () => {
   describe("transient provider failures are retryable", () => {
     it("classifies an explicit Horizon 5xx/429 provider error as retryable", () => {
       const decision = classifyReconciliationError(
-        new RetryableHorizonError("Transient Horizon response: 503"),
+        new RetryableHorizonError("Transient Horizon response: 503")
       );
 
       expect(decision.retryable).toBe(true);
@@ -28,8 +28,8 @@ describe("classifyReconciliationError", () => {
         new ServiceError(
           "horizon_unavailable",
           "Horizon is temporarily unavailable. Please retry later.",
-          503,
-        ),
+          503
+        )
       );
 
       expect(decision).toMatchObject({
@@ -77,7 +77,7 @@ describe("classifyReconciliationError", () => {
   describe("permanent validation failures are NOT retryable", () => {
     it("classifies a malformed response error as permanent", () => {
       const decision = classifyReconciliationError(
-        new ServiceError("invalid_amount", "Invalid decimal amount: abc", 500),
+        new ServiceError("invalid_amount", "Invalid decimal amount: abc", 500)
       );
 
       expect(decision.retryable).toBe(false);
@@ -89,8 +89,8 @@ describe("classifyReconciliationError", () => {
         new ServiceError(
           "horizon_request_failed",
           "Horizon rejected the verification request.",
-          502,
-        ),
+          502
+        )
       );
 
       expect(decision.retryable).toBe(false);
@@ -99,11 +99,7 @@ describe("classifyReconciliationError", () => {
 
     it("classifies a business-rule invalid_payment error as permanent", () => {
       const decision = classifyReconciliationError(
-        new ServiceError(
-          "invalid_payment",
-          "No Stellar payment operation matched.",
-          422,
-        ),
+        new ServiceError("invalid_payment", "No Stellar payment operation matched.", 422)
       );
 
       expect(decision.retryable).toBe(false);
@@ -112,7 +108,7 @@ describe("classifyReconciliationError", () => {
 
     it("classifies a not-found error as permanent", () => {
       const decision = classifyReconciliationError(
-        new ServiceError("transaction_not_found", "Transaction not found.", 404),
+        new ServiceError("transaction_not_found", "Transaction not found.", 404)
       );
 
       expect(decision.retryable).toBe(false);
@@ -121,11 +117,7 @@ describe("classifyReconciliationError", () => {
 
     it("classifies a reconciliation conflict as permanent", () => {
       const decision = classifyReconciliationError(
-        new ServiceError(
-          "reconciliation_conflict",
-          "Investment is already confirmed.",
-          409,
-        ),
+        new ServiceError("reconciliation_conflict", "Investment is already confirmed.", 409)
       );
 
       expect(decision.retryable).toBe(false);
@@ -143,7 +135,7 @@ describe("classifyReconciliationError", () => {
     it("exposes the attempt number it was classified at", () => {
       const decision = classifyReconciliationError(
         new ServiceError("horizon_unavailable", "down", 503),
-        3,
+        3
       );
 
       expect(decision.attempt).toBe(3);
@@ -175,11 +167,10 @@ describe("classifyReconciliationError", () => {
       const nonErrors: unknown[] = [undefined, null, "text", 42, { status: 200 }];
 
       for (const value of nonErrors) {
-        const decision: ReconciliationRetryDecision =
-          classifyReconciliationError(value);
+        const decision: ReconciliationRetryDecision = classifyReconciliationError(value);
         expect(typeof decision.retryable).toBe("boolean");
         expect(["transient_provider", "permanent_validation"]).toContain(
-          decision.kind as ReconciliationFailureKind,
+          decision.kind as ReconciliationFailureKind
         );
       }
     });

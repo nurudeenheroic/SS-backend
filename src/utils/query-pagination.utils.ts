@@ -67,11 +67,11 @@ function invalidCursor(message: string): ServiceError {
 export function encodeQueryCursor(
   field: string,
   value: string | number | Date,
-  id?: string,
+  id?: string
 ): string {
   const normalizedValue = value instanceof Date ? value.toISOString() : value;
   return Buffer.from(
-    JSON.stringify({ field, value: normalizedValue, ...(id !== undefined ? { id } : {}) }),
+    JSON.stringify({ field, value: normalizedValue, ...(id !== undefined ? { id } : {}) })
   ).toString("base64");
 }
 
@@ -125,7 +125,7 @@ function splitCursorField(cursorField: string): { alias: string; column: string 
   const parts = cursorField.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw invalidCursor(
-      `Invalid cursorField "${cursorField}": expected "<alias>.<column>" (e.g. "invoice.createdAt")`,
+      `Invalid cursorField "${cursorField}": expected "<alias>.<column>" (e.g. "invoice.createdAt")`
     );
   }
   return { alias: parts[0], column: parts[1] };
@@ -146,7 +146,7 @@ function splitCursorField(cursorField: string): { alias: string; column: string 
  * secondary sort, so equal primary sort values never produce gaps or repeats.
  */
 export async function paginateQuery<T extends ObjectLiteral>(
-  options: PaginateQueryOptions<T>,
+  options: PaginateQueryOptions<T>
 ): Promise<PaginateQueryResult<T>> {
   const { queryBuilder, cursorField, limit, cursor } = options;
   const order = options.order ?? "DESC";
@@ -164,7 +164,7 @@ export async function paginateQuery<T extends ObjectLiteral>(
     const decoded = decodeQueryCursor(cursor);
     if (decoded.field !== cursorField) {
       throw invalidCursor(
-        `Invalid cursor: was encoded for field "${decoded.field}" but query is paginating on "${cursorField}"`,
+        `Invalid cursor: was encoded for field "${decoded.field}" but query is paginating on "${cursorField}"`
       );
     }
 
@@ -183,7 +183,7 @@ export async function paginateQuery<T extends ObjectLiteral>(
         {
           [paramName]: decoded.value,
           [tiebreakerParamName]: decoded.id,
-        },
+        }
       );
     }
   }
@@ -204,16 +204,20 @@ export async function paginateQuery<T extends ObjectLiteral>(
   if (hasMore && items.length > 0) {
     const lastItem = items[items.length - 1] as unknown as Record<string, unknown>;
     const lastValue = lastItem[columnOf(cursorField)];
-    if (typeof lastValue === "string" || typeof lastValue === "number" || lastValue instanceof Date) {
+    if (
+      typeof lastValue === "string" ||
+      typeof lastValue === "number" ||
+      lastValue instanceof Date
+    ) {
       const lastId = lastItem[idColumn];
       nextCursor = encodeQueryCursor(
         cursorField,
         lastValue,
-        typeof lastId === "string" ? lastId : undefined,
+        typeof lastId === "string" ? lastId : undefined
       );
     } else {
       throw invalidCursor(
-        `paginateQuery: cursor column "${columnOf(cursorField)}" must resolve to a string, number, or Date (got ${typeof lastValue})`,
+        `paginateQuery: cursor column "${columnOf(cursorField)}" must resolve to a string, number, or Date (got ${typeof lastValue})`
       );
     }
   }

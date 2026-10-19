@@ -10,9 +10,7 @@ import { RetryableHorizonError } from "./verify-payment.service";
  * authorization issues, business-rule violations) are not retryable because no
  * amount of retrying will change the outcome.
  */
-export type ReconciliationFailureKind =
-  | "transient_provider"
-  | "permanent_validation";
+export type ReconciliationFailureKind = "transient_provider" | "permanent_validation";
 
 export interface ReconciliationRetryDecision {
   /** `true` when the failure is safe to retry on a later tick. */
@@ -62,7 +60,7 @@ function timeoutDecision(attempt: number, name: string): ReconciliationRetryDeci
  */
 export function classifyReconciliationError(
   error: unknown,
-  attempt = 1,
+  attempt = 1
 ): ReconciliationRetryDecision {
   // 1. Explicit request timeouts / aborts are always transient.
   if (error instanceof Error && TIMEOUT_ERROR_NAMES.has(error.name)) {

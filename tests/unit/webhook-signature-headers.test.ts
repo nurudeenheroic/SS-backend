@@ -73,7 +73,7 @@ describe("verifyWebhookSignatureHeaders", () => {
           timestamp: String(NOW_MS),
           secret: SECRET,
           now,
-        }),
+        })
       ).toBe(String(NOW_MS));
     });
   });
@@ -89,7 +89,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "INVALID_SIGNATURE",
+        "INVALID_SIGNATURE"
       );
     });
 
@@ -105,12 +105,16 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "INVALID_SIGNATURE",
+        "INVALID_SIGNATURE"
       );
     });
 
     it("rejects a signature produced with the wrong secret", () => {
-      const wrongSig = computeWebhookSignatureForTimestamp(PAYLOAD, String(NOW_MS), "different-secret");
+      const wrongSig = computeWebhookSignatureForTimestamp(
+        PAYLOAD,
+        String(NOW_MS),
+        "different-secret"
+      );
 
       expectWebhookError(
         () =>
@@ -121,7 +125,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "INVALID_SIGNATURE",
+        "INVALID_SIGNATURE"
       );
     });
 
@@ -137,7 +141,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "INVALID_SIGNATURE",
+        "INVALID_SIGNATURE"
       );
     });
   });
@@ -153,7 +157,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "MISSING_SIGNATURE",
+        "MISSING_SIGNATURE"
       );
     });
 
@@ -167,7 +171,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "MISSING_SIGNATURE",
+        "MISSING_SIGNATURE"
       );
     });
 
@@ -182,7 +186,7 @@ describe("verifyWebhookSignatureHeaders", () => {
               secret: SECRET,
               now,
             }),
-          "MISSING_SIGNATURE",
+          "MISSING_SIGNATURE"
         );
       }
     });
@@ -198,7 +202,7 @@ describe("verifyWebhookSignatureHeaders", () => {
               secret: SECRET,
               now,
             }),
-          "MISSING_TIMESTAMP",
+          "MISSING_TIMESTAMP"
         );
       }
     });
@@ -215,7 +219,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "MALFORMED_SIGNATURE",
+        "MALFORMED_SIGNATURE"
       );
     });
 
@@ -229,7 +233,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "MALFORMED_SIGNATURE",
+        "MALFORMED_SIGNATURE"
       );
     });
 
@@ -243,7 +247,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "TIMESTAMP_OUT_OF_RANGE",
+        "TIMESTAMP_OUT_OF_RANGE"
       );
     });
 
@@ -259,7 +263,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "TIMESTAMP_SKEWED",
+        "TIMESTAMP_SKEWED"
       );
     });
 
@@ -275,7 +279,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             secret: SECRET,
             now,
           }),
-        "TIMESTAMP_SKEWED",
+        "TIMESTAMP_SKEWED"
       );
     });
   });
@@ -292,7 +296,7 @@ describe("verifyWebhookSignatureHeaders", () => {
           secret: SECRET,
           maxTimestampSkewMs: 5_000,
           now,
-        }),
+        })
       ).not.toThrow();
 
       const outsideWindow = NOW_MS - 10_000;
@@ -307,7 +311,7 @@ describe("verifyWebhookSignatureHeaders", () => {
             maxTimestampSkewMs: 5_000,
             now,
           }),
-        "TIMESTAMP_SKEWED",
+        "TIMESTAMP_SKEWED"
       );
     });
   });

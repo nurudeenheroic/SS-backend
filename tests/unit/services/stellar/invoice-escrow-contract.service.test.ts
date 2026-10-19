@@ -35,16 +35,14 @@ describe("InvoiceEscrowContractService", () => {
     });
 
     it("should initialize correctly with string contract ID", () => {
-      const stringInitService = new InvoiceEscrowContractService(
-        ESCROW_CONTRACT_ID,
-        mockLogger,
-      );
+      const stringInitService = new InvoiceEscrowContractService(ESCROW_CONTRACT_ID, mockLogger);
       expect(stringInitService.contractId).toBe(ESCROW_CONTRACT_ID);
     });
 
     it("should throw error if contractId is empty", () => {
-      expect(() => new InvoiceEscrowContractService("")).toThrow(
-        "contractId is required.",
+      expect(() => new InvoiceEscrowContractService("")).toThrow("contractId is required.");
+      expect(() => new InvoiceEscrowContractService({ contractId: "" })).toThrow(
+        "contractId is required."
       );
       expect(
         () => new InvoiceEscrowContractService({ contractId: "" }),
@@ -62,15 +60,11 @@ describe("InvoiceEscrowContractService", () => {
         TEST_SELLER,
         TEST_AMOUNT_STROOPS,
         TEST_DUE_DATE,
-        TEST_TOKEN,
+        TEST_TOKEN
       );
 
       expect(op.body().switch().name).toBe("invokeHostFunction");
-      const invokeContractArgs = op
-        .body()
-        .invokeHostFunctionOp()
-        .hostFunction()
-        .invokeContract();
+      const invokeContractArgs = op.body().invokeHostFunctionOp().hostFunction().invokeContract();
 
       expect(invokeContractArgs.functionName().toString()).toBe("create_escrow");
 
@@ -144,7 +138,7 @@ describe("InvoiceEscrowContractService", () => {
           sorobanContractId: ESCROW_CONTRACT_ID,
           sellerAddress: TEST_SELLER,
           amountStroops: TEST_AMOUNT_STROOPS.toString(),
-        },
+        }
       );
     });
 
@@ -179,11 +173,7 @@ describe("InvoiceEscrowContractService", () => {
     it("should construct valid fund_escrow host function invocation", () => {
       const op = service.buildFundEscrowTx(TEST_INVOICE_ID, TEST_SELLER, TEST_AMOUNT_STROOPS);
       expect(op.body().switch().name).toBe("invokeHostFunction");
-      const invokeContractArgs = op
-        .body()
-        .invokeHostFunctionOp()
-        .hostFunction()
-        .invokeContract();
+      const invokeContractArgs = op.body().invokeHostFunctionOp().hostFunction().invokeContract();
 
       expect(invokeContractArgs.functionName().toString()).toBe("fund_escrow");
       const args = invokeContractArgs.args();
@@ -209,11 +199,7 @@ describe("InvoiceEscrowContractService", () => {
   describe("buildRecordPaymentTx", () => {
     it("should construct valid record_payment host function invocation", () => {
       const op = service.buildRecordPaymentTx(TEST_INVOICE_ID, TEST_SELLER, TEST_AMOUNT_STROOPS);
-      const invokeContractArgs = op
-        .body()
-        .invokeHostFunctionOp()
-        .hostFunction()
-        .invokeContract();
+      const invokeContractArgs = op.body().invokeHostFunctionOp().hostFunction().invokeContract();
 
       expect(invokeContractArgs.functionName().toString()).toBe("record_payment");
       const args = invokeContractArgs.args();
@@ -237,11 +223,7 @@ describe("InvoiceEscrowContractService", () => {
   describe("buildSettleEscrowTx", () => {
     it("should construct valid settle_escrow host function invocation", () => {
       const op = service.buildSettleEscrowTx(TEST_INVOICE_ID);
-      const invokeContractArgs = op
-        .body()
-        .invokeHostFunctionOp()
-        .hostFunction()
-        .invokeContract();
+      const invokeContractArgs = op.body().invokeHostFunctionOp().hostFunction().invokeContract();
 
       expect(invokeContractArgs.functionName().toString()).toBe("settle_escrow");
       const args = invokeContractArgs.args();
