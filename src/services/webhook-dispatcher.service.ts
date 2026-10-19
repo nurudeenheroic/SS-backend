@@ -3,6 +3,8 @@ import { DataSource } from "typeorm";
 import { WebhookSubscription } from "../models/WebhookSubscription.model";
 import { WebhookDeliveryLog } from "../models/WebhookDeliveryLog.model";
 import { logger, type AppLogger } from "../observability/logger";
+import { withCorrelationHeaders } from "../observability/request-context";
+import { validateWebhookUrl, UrlValidationError } from "../utils/url-validation";
 
 export function generateWebhookSignature(payload: string, secret: string): string {
   return crypto.createHmac("sha256", secret).update(payload).digest("hex");
@@ -24,25 +26,23 @@ export interface WebhookDispatchResult {
 export class WebhookDispatcherService {
   constructor(
     private readonly dataSource: DataSource,
-    private readonly appLogger: AppLogger = logger,
+    private readonly appLogger: AppLogger = logger
   ) {}
 
   async dispatchWebhookEvent(
     eventType: string,
     payload: unknown,
-    eventId?: string,
+    eventId?: string
   ): Promise<WebhookDispatchResult[]> {
     const subscriptions = await this.dataSource
       .getRepository(WebhookSubscription)
       .find({ where: { active: true } });
     const body = JSON.stringify({ eventType, payload });
     const eligible = subscriptions.filter((subscription) =>
-      subscription.eventTypes.includes(eventType),
+      subscription.eventTypes.includes(eventType)
     );
     return Promise.all(
-      eligible.map((subscription) =>
-        this.deliver(subscription, eventType, body, eventId),
-      ),
+      eligible.map((subscription) => this.deliver(subscription, eventType, body, eventId))
     );
   }
 
@@ -50,12 +50,8 @@ export class WebhookDispatcherService {
     subscription: WebhookSubscription,
     eventType: string,
     body: string,
-    eventId?: string,
+    eventId?: string
   ): Promise<WebhookDispatchResult> {
-    // Idempotency: a duplicate event (same subscription + eventId) that has
-    // already been delivered successfully must not be re-delivered, otherwise
-    // the receiving system sees the same downstream notification/state
-    // transition twice.
     if (eventId && (await this.alreadyDelivered(subscription.id, eventId))) {
       this.appLogger.info("webhook.event.already_handled", {
         subscription_id: subscription.id,
@@ -71,6 +67,33 @@ export class WebhookDispatcherService {
       };
     }
 
+    try {
+      validateWebhookUrl(subscription.url);
+    } catch (error) {
+      const errorMsg = error instanceof UrlValidationError ? error.message : "URL validation failed";
+      this.appLogger.warn("webhook.url.validation_failed", {
+        subscription_id: subscription.id,
+        url: subscription.url,
+        error: errorMsg,
+      });
+      await this.logDelivery(
+        subscription.id,
+        eventType,
+        eventId,
+        0,
+        null,
+        false,
+        errorMsg
+      );
+      return {
+        subscriptionId: subscription.id,
+        delivered: false,
+        attempts: 0,
+        responseStatus: null,
+        duplicate: false,
+      };
+    }
+
     let lastStatus: number | null = null;
     let lastError: string | null = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -79,11 +102,11 @@ export class WebhookDispatcherService {
         const timer = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(subscription.url, {
           method: "POST",
-          headers: {
+          headers: withCorrelationHeaders({
             "content-type": "application/json",
             "x-signature": generateWebhookSignature(body, subscription.secret),
             ...(eventId ? { "x-event-id": eventId } : {}),
-          },
+          }),
           body,
           signal: controller.signal,
         });
@@ -97,7 +120,7 @@ export class WebhookDispatcherService {
           attempt,
           response.status,
           delivered,
-          delivered ? null : `HTTP ${response.status}`,
+          delivered ? null : `HTTP ${response.status}`
         );
         if (delivered) {
           return {
@@ -118,7 +141,7 @@ export class WebhookDispatcherService {
           attempt,
           lastStatus,
           false,
-          lastError,
+          lastError
         );
       }
       if (attempt < 3) {
@@ -141,10 +164,7 @@ export class WebhookDispatcherService {
     };
   }
 
-  private async alreadyDelivered(
-    subscriptionId: string,
-    eventId: string,
-  ): Promise<boolean> {
+  private async alreadyDelivered(subscriptionId: string, eventId: string): Promise<boolean> {
     const existing = await this.dataSource
       .getRepository(WebhookDeliveryLog)
       .findOne({ where: { subscriptionId, eventId, delivered: true } });
@@ -158,7 +178,7 @@ export class WebhookDispatcherService {
     attempt: number,
     responseStatus: number | null,
     delivered: boolean,
-    errorMessage: string | null,
+    errorMessage: string | null
   ): Promise<void> {
     await this.dataSource.getRepository(WebhookDeliveryLog).save({
       subscriptionId,
@@ -182,7 +202,7 @@ export class WebhookDispatcherService {
 
 export function createWebhookDispatcherService(
   dataSource: DataSource,
-  appLogger?: AppLogger,
+  appLogger?: AppLogger
 ): WebhookDispatcherService {
   return new WebhookDispatcherService(dataSource, appLogger);
 }

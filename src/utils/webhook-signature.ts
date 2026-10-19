@@ -19,7 +19,7 @@ export function computeWebhookSignature(payload: string, secret: string): string
 export function verifyWebhookSignature(
   payload: string,
   signature: string,
-  secret: string,
+  secret: string
 ): boolean {
   try {
     if (!payload || !signature || !secret) {
@@ -57,7 +57,7 @@ export type WebhookSignatureErrorCode =
 export class WebhookSignatureError extends Error {
   constructor(
     public readonly code: WebhookSignatureErrorCode,
-    message: string,
+    message: string
   ) {
     super(message);
     this.name = "WebhookSignatureError";
@@ -77,7 +77,7 @@ export const DEFAULT_MAX_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
 export function computeWebhookSignatureForTimestamp(
   payload: string,
   timestamp: string,
-  secret: string,
+  secret: string
 ): string {
   return computeWebhookSignature(`${timestamp}.${payload}`, secret);
 }
@@ -112,9 +112,7 @@ export interface VerifyWebhookHeadersOptions {
  *   failure. Never returns `false` — every rejection is a typed error that a
  *   handler can map to a 4xx response.
  */
-export function verifyWebhookSignatureHeaders(
-  options: VerifyWebhookHeadersOptions,
-): string {
+export function verifyWebhookSignatureHeaders(options: VerifyWebhookHeadersOptions): string {
   const {
     payload,
     signature,
@@ -125,23 +123,20 @@ export function verifyWebhookSignatureHeaders(
   } = options;
 
   if (!secret) {
-    throw new WebhookSignatureError(
-      "INVALID_SIGNATURE",
-      "Webhook secret is not configured.",
-    );
+    throw new WebhookSignatureError("INVALID_SIGNATURE", "Webhook secret is not configured.");
   }
 
   if (timestamp === undefined || timestamp === null || timestamp === "") {
     throw new WebhookSignatureError(
       "MISSING_TIMESTAMP",
-      `Missing '${WEBHOOK_TIMESTAMP_HEADER}' header.`,
+      `Missing '${WEBHOOK_TIMESTAMP_HEADER}' header.`
     );
   }
 
   if (signature === undefined || signature === null || signature === "") {
     throw new WebhookSignatureError(
       "MISSING_SIGNATURE",
-      `Missing '${WEBHOOK_SIGNATURE_HEADER}' header.`,
+      `Missing '${WEBHOOK_SIGNATURE_HEADER}' header.`
     );
   }
 
@@ -150,14 +145,14 @@ export function verifyWebhookSignatureHeaders(
   if (Number.isNaN(skewMs) || !Number.isFinite(skewMs)) {
     throw new WebhookSignatureError(
       "TIMESTAMP_OUT_OF_RANGE",
-      `'${WEBHOOK_TIMESTAMP_HEADER}' is not a valid timestamp.`,
+      `'${WEBHOOK_TIMESTAMP_HEADER}' is not a valid timestamp.`
     );
   }
 
   if (Math.abs(skewMs) > maxTimestampSkewMs) {
     throw new WebhookSignatureError(
       "TIMESTAMP_SKEWED",
-      `'${WEBHOOK_TIMESTAMP_HEADER}' is outside the allowed ${maxTimestampSkewMs}ms window.`,
+      `'${WEBHOOK_TIMESTAMP_HEADER}' is outside the allowed ${maxTimestampSkewMs}ms window.`
     );
   }
 
@@ -165,7 +160,7 @@ export function verifyWebhookSignatureHeaders(
   if (!/^[0-9a-f]{64}$/i.test(signature)) {
     throw new WebhookSignatureError(
       "MALFORMED_SIGNATURE",
-      "'x-webhook-signature' is not a valid HMAC-SHA256 hex signature.",
+      "'x-webhook-signature' is not a valid HMAC-SHA256 hex signature."
     );
   }
 
@@ -174,20 +169,14 @@ export function verifyWebhookSignatureHeaders(
   if (expected.length !== signature.length) {
     throw new WebhookSignatureError(
       "MALFORMED_SIGNATURE",
-      "'x-webhook-signature' has an invalid length.",
+      "'x-webhook-signature' has an invalid length."
     );
   }
 
-  const matches = crypto.timingSafeEqual(
-    Buffer.from(expected),
-    Buffer.from(signature),
-  );
+  const matches = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 
   if (!matches) {
-    throw new WebhookSignatureError(
-      "INVALID_SIGNATURE",
-      "Webhook signature verification failed.",
-    );
+    throw new WebhookSignatureError("INVALID_SIGNATURE", "Webhook signature verification failed.");
   }
 
   return timestamp;
